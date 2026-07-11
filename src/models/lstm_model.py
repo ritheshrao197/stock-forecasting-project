@@ -1,23 +1,33 @@
 """
-LSTM Model Implementation - Fixed Version
+LSTM Model Implementation - With Error Handling
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping
 import warnings
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
+
+# Try to import TensorFlow with error handling
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout, GRU
+    from tensorflow.keras.callbacks import EarlyStopping
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("⚠️ TensorFlow not available. LSTM model will not work.")
 
 class LSTMModel:
     """LSTM model for time series forecasting"""
     
-    def __init__(self, lookback=30, n_features=1):  # Reduced default lookback to 30
+    def __init__(self, lookback=30, n_features=1):
         self.lookback = lookback
         self.n_features = n_features
         self.model = None
@@ -28,9 +38,13 @@ class LSTMModel:
         self.y_test = None
         self.predictions = None
         self.history = None
+        
+        if not TENSORFLOW_AVAILABLE:
+            print("⚠️ LSTM model initialized but TensorFlow is not available.")
+            print("   LSTM will not work. Please install TensorFlow to use this model.")
     
     def prepare_data(self, data, target_column='Close', feature_columns=None, test_size=0.2):
-        """Prepare data for LSTM training with validation"""
+        """Prepare data for LSTM training"""
         if feature_columns is None:
             feature_columns = [target_column]
         elif target_column not in feature_columns:
@@ -82,6 +96,9 @@ class LSTMModel:
     
     def build_model(self, lstm_units=[50, 25], dropout_rate=0.2, learning_rate=0.001):
         """Build LSTM architecture"""
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError("TensorFlow is not available. Please install tensorflow-cpu or tensorflow.")
+        
         print("Building LSTM model...")
         
         # Check if we have training data
@@ -107,8 +124,11 @@ class LSTMModel:
         self.model = model
         return model
     
-    def train(self, epochs=20, batch_size=16, validation_split=0.1, verbose=1):  # Reduced defaults
+    def train(self, epochs=20, batch_size=16, validation_split=0.1, verbose=1):
         """Train the LSTM model"""
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError("TensorFlow is not available. Please install tensorflow-cpu or tensorflow.")
+        
         if self.model is None:
             self.build_model()
         
@@ -147,6 +167,9 @@ class LSTMModel:
     
     def predict(self, X_test=None, inverse_transform=True):
         """Generate predictions"""
+        if not TENSORFLOW_AVAILABLE:
+            raise ImportError("TensorFlow is not available. Please install tensorflow-cpu or tensorflow.")
+        
         if X_test is None:
             X_test = self.X_test
         
@@ -170,6 +193,10 @@ class LSTMModel:
     
     def evaluate(self, y_true=None, y_pred=None, plot=True):
         """Evaluate model performance"""
+        if not TENSORFLOW_AVAILABLE:
+            print("⚠️ TensorFlow not available. Cannot evaluate LSTM model.")
+            return {'RMSE': np.nan, 'MAE': np.nan, 'MAPE': np.nan}
+        
         if y_true is None:
             y_true = self.y_test
         
@@ -259,6 +286,10 @@ class LSTMModel:
     
     def save_model(self, filename="lstm_model.h5"):
         """Save the trained model"""
+        if not TENSORFLOW_AVAILABLE:
+            print("⚠️ TensorFlow not available. Cannot save model.")
+            return
+        
         import os
         os.makedirs('models', exist_ok=True)
         self.model.save(f"models/{filename}")
@@ -271,10 +302,13 @@ if __name__ == "__main__":
     loader = StockDataLoader(ticker="AAPL", start_date="2020-01-01")
     data = loader.get_ready_data(add_indicators=True)
     
-    lstm = LSTMModel(lookback=30, n_features=5)  # Reduced lookback
-    feature_cols = ['Close', 'SMA_20', 'RSI', 'Volume', 'Volatility']
-    lstm.prepare_data(data, target_column='Close', feature_columns=feature_cols, test_size=0.2)
-    lstm.build_model(lstm_units=[50, 25], dropout_rate=0.2)
-    lstm.train(epochs=10, batch_size=16)  # Reduced epochs
-    lstm.evaluate()
-    lstm.plot_training_history()
+    if TENSORFLOW_AVAILABLE:
+        lstm = LSTMModel(lookback=30, n_features=5)
+        feature_cols = ['Close', 'SMA_20', 'RSI', 'Volume', 'Volatility']
+        lstm.prepare_data(data, target_column='Close', feature_columns=feature_cols, test_size=0.2)
+        lstm.build_model(lstm_units=[50, 25], dropout_rate=0.2)
+        lstm.train(epochs=10, batch_size=16)
+        lstm.evaluate()
+        lstm.plot_training_history()
+    else:
+        print("❌ TensorFlow not available. Skipping LSTM demo.")
