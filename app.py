@@ -1,55 +1,13 @@
 """
 Stock Market Price Forecasting - Interactive Web UI
-Main Entry Point - Fixed for Infinite Loop
+Main Entry Point - Fixed for Infinite Loop & Rate Limiting
 """
-# At the top of app.py, add these imports
-import time
-import random
-from functools import lru_cache
 
-# Add this cache decorator
-@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
-def fetch_stock_data_with_cache(ticker, start_date, end_date):
-    """Fetch stock data with caching to prevent rate limiting"""
-    try:
-        # Add a small random delay to prevent hitting rate limits
-        time.sleep(random.uniform(0.5, 1.5))
-        
-        loader = StockDataLoader(
-            ticker=ticker,
-            start_date=start_date,
-            end_date=end_date
-        )
-        data = loader.get_ready_data(add_indicators=True)
-        return data
-    except Exception as e:
-        # If rate limited, wait longer and retry
-        if "Too Many Requests" in str(e):
-            time.sleep(random.uniform(5, 10))
-            loader = StockDataLoader(
-                ticker=ticker,
-                start_date=start_date,
-                end_date=end_date
-            )
-            data = loader.get_ready_data(add_indicators=True)
-            return data
-        raise e
-
-# In your backend logic, replace the data loading with:
-data = fetch_stock_data_with_cache(ticker, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
 import streamlit as st
-# Enable caching for data loading
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_stock_data(ticker, start_date, end_date):
-    """Load stock data with caching"""
-    from src.data_loader import StockDataLoader
-    loader = StockDataLoader(ticker=ticker, start_date=start_date, end_date=end_date)
-    data = loader.get_ready_data(add_indicators=True)
-    return data
-
-# Use this in your backend logic instead of creating a new loader each time
 import pandas as pd
 import numpy as np
+import time
+import random
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
@@ -104,7 +62,41 @@ if not LSTM_AVAILABLE:
         def plot_training_history(self):
             pass
 
-# Page configuration
+# ============================================
+# CACHING FOR RATE LIMITING
+# ============================================
+
+@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
+def fetch_stock_data_with_cache(ticker, start_date, end_date):
+    """Fetch stock data with caching to prevent rate limiting"""
+    try:
+        # Add a small random delay to prevent hitting rate limits
+        time.sleep(random.uniform(0.5, 1.5))
+        
+        loader = StockDataLoader(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date
+        )
+        data = loader.get_ready_data(add_indicators=True)
+        return data
+    except Exception as e:
+        # If rate limited, wait longer and retry
+        if "Too Many Requests" in str(e) or "Rate limited" in str(e):
+            time.sleep(random.uniform(5, 10))
+            loader = StockDataLoader(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date
+            )
+            data = loader.get_ready_data(add_indicators=True)
+            return data
+        raise e
+
+# ============================================
+# PAGE CONFIGURATION
+# ============================================
+
 st.set_page_config(
     page_title=APP_TITLE,
     page_icon=APP_ICON,
@@ -113,9 +105,15 @@ st.set_page_config(
 )
 
 # Custom CSS
-# In app.py, after st.set_page_config()
 st.markdown("""
 <style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
     /* Fix sidebar scrolling */
     section[data-testid="stSidebar"] {
         height: 100vh !important;
@@ -159,10 +157,21 @@ st.markdown("""
     .stMarkdown {
         margin-bottom: 0.2rem !important;
     }
+    
+    .metric-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 10px;
+        border-left: 4px solid #1f77b4;
+        margin: 0.5rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state - ONLY ONCE
+# ============================================
+# SESSION STATE - Initialize Only Once
+# ============================================
+
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'predictions' not in st.session_state:
@@ -177,6 +186,8 @@ if 'is_running' not in st.session_state:
     st.session_state.is_running = False
 if 'forecast_completed' not in st.session_state:
     st.session_state.forecast_completed = False
+if 'rate_limit_retry_count' not in st.session_state:
+    st.session_state.rate_limit_retry_count = 0
 
 # ============================================
 # SIDEBAR
@@ -262,8 +273,8 @@ with tab6:
 # BACKEND LOGIC - Run Forecast (ONLY ON BUTTON CLICK)
 # ============================================
 
-# Only run when the button is clicked AND not already running
-if config['run_button'] and not st.session_state.is_running and not st.session_state.forecast_completed:
+def run_forecast():
+    """Execute the forecast with rate limiting handling"""
     
     # Clear previous logs
     clear_logs()
@@ -286,30 +297,32 @@ if config['run_button'] and not st.session_state.is_running and not st.session_s
     
     with st.spinner("🔄 Fetching data and training models..."):
         try:
-            # Load data
+            # ============================================
+            # LOAD DATA WITH CACHING
+            # ============================================
             log_info("📊 Step 1: Loading stock data...")
             log_info(f"   Ticker: {config['ticker']}")
             
-            loader = StockDataLoader(
-                ticker=config['ticker'],
-                start_date=config['start_date'].strftime("%Y-%m-%d"),
-                end_date=config['end_date'].strftime("%Y-%m-%d")
+            # Use cached data loader
+            data = fetch_stock_data_with_cache(
+                config['ticker'],
+                config['start_date'].strftime("%Y-%m-%d"),
+                config['end_date'].strftime("%Y-%m-%d")
             )
-            
-            with OutputCapture() as capture:
-                data = loader.get_ready_data(add_indicators=True)
             
             if data is None or data.empty:
                 log_error("❌ No data found. Please check the ticker symbol.")
                 st.error("❌ No data found. Please check the ticker symbol.")
                 st.session_state.is_running = False
-                st.stop()
+                return
             
             st.session_state.data = data
             log_success(f"✅ Data loaded: {len(data)} rows")
             log_info(f"   Date range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}")
             
-            # Split data
+            # ============================================
+            # SPLIT DATA
+            # ============================================
             log_info("📊 Step 2: Splitting data...")
             preprocessor = DataPreprocessor(data)
             train, val, test = preprocessor.split_data(test_size=config['test_size'], validation_size=0.1)
@@ -356,7 +369,7 @@ if config['run_button'] and not st.session_state.is_running and not st.session_s
                     log_error(f"❌ ARIMA model failed: {str(e)}")
             
             # ============================================
-            # Prophet
+            # PROPHET
             # ============================================
             if config['use_prophet']:
                 log_header("="*50)
@@ -395,7 +408,7 @@ if config['run_button'] and not st.session_state.is_running and not st.session_s
                     log_error(f"❌ Prophet model failed: {str(e)}")
             
             # ============================================
-            # LSTM (only if available)
+            # LSTM
             # ============================================
             if config['use_lstm'] and LSTM_AVAILABLE:
                 log_header("="*50)
@@ -458,7 +471,7 @@ if config['run_button'] and not st.session_state.is_running and not st.session_s
                 log_warning("⚠️ LSTM skipped - TensorFlow not installed")
             
             # ============================================
-            # Complete
+            # COMPLETE
             # ============================================
             log_header("="*50)
             log_header("✅ FORECAST COMPLETE!")
@@ -481,18 +494,41 @@ if config['run_button'] and not st.session_state.is_running and not st.session_s
             st.session_state.is_running = False
             
         except Exception as e:
-            log_error(f"❌ Error: {str(e)}")
-            st.error(f"❌ Error: {str(e)}")
-            st.exception(e)
+            error_msg = str(e)
+            log_error(f"❌ Error: {error_msg}")
+            
+            # Check if it's a rate limiting error
+            if "Too Many Requests" in error_msg or "Rate limited" in error_msg:
+                st.error("⏳ Rate limit exceeded. Please wait a few minutes and try again.")
+                st.info("💡 Tip: Try selecting a different ticker or reduce the date range.")
+                st.session_state.rate_limit_retry_count += 1
+            else:
+                st.error(f"❌ Error: {error_msg}")
+                st.exception(e)
+            
             st.session_state.is_running = False
             st.session_state.forecast_completed = False
 
-# If forecast is completed, show a message
+# ============================================
+# TRIGGER FORECAST
+# ============================================
+
+if config['run_button'] and not st.session_state.is_running and not st.session_state.forecast_completed:
+    run_forecast()
+    st.rerun()
+
+# ============================================
+# STATUS MESSAGES
+# ============================================
+
 if st.session_state.forecast_completed and st.session_state.models_trained:
     st.success("✅ Forecast completed! Results are available in the tabs above.")
 
+if st.session_state.get('rate_limit_retry_count', 0) > 2:
+    st.warning("⚠️ Multiple rate limit errors detected. Please wait a few minutes before trying again.")
+
 # ============================================
-# Footer
+# FOOTER
 # ============================================
 
 st.markdown("---")
