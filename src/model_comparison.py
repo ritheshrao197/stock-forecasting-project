@@ -165,6 +165,24 @@ class ModelComparison:
         print(f"Report saved to {save_path}")
         return report
 
+    def export_results_csv(self, save_path='reports/model_comparison_results.csv'):
+        """Export comparison results to CSV
+        
+        Parameters:
+        -----------
+        save_path : str
+            Path to save the CSV file
+        """
+        if self.results is None or self.results.empty:
+            logger.warning("No results to export")
+            return
+        
+        import os
+        os.makedirs('reports', exist_ok=True)
+        self.results.to_csv(save_path, index=False)
+        logger.info(f"Results exported to {save_path}")
+        print(f"Results exported to {save_path}")
+
 
 if __name__ == "__main__":
     print("Model comparison module loaded successfully")
