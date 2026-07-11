@@ -607,8 +607,8 @@ if 'end_date' not in st.session_state:
 if 'last_report' not in st.session_state:
     st.session_state.last_report = None
 
-REPORTS_DIR = Path("reports")
-REPORTS_DIR.mkdir(exist_ok=True)
+REPORTS_DIR = Path.home() / "Documents" / "StockForgeReports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================
 # SIDEBAR
@@ -637,7 +637,7 @@ with st.sidebar:
             st.session_state.results = None
             st.session_state.models_trained = False
             st.session_state.forecast_completed = False
-            st.rerun()
+            # st.rerun()
     with market_col2:
         if st.button("🌍 Global", use_container_width=True,
                     type="primary" if st.session_state.market_type == "International" else "secondary"):
@@ -647,7 +647,7 @@ with st.sidebar:
             st.session_state.results = None
             st.session_state.models_trained = False
             st.session_state.forecast_completed = False
-            st.rerun()
+            # st.rerun()
     
     # Show current market badge
     if st.session_state.market_type == "India":
@@ -1503,17 +1503,39 @@ def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
     st.session_state.forecast_running = False
 
 # ============================================
-# TRIGGER FORECAST
+# TRIGGER FORECAST (FIXED)
 # ============================================
 
-if run_button:
-    st.session_state.trigger_forecast = True
+# Initialize state
+if "forecast_running" not in st.session_state:
+    st.session_state.forecast_running = False
 
-if st.session_state.trigger_forecast and not st.session_state.forecast_running:
-    st.session_state.trigger_forecast = False
-    run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
-                 test_size, lookback, lstm_epochs)
-    st.rerun()
+if "forecast_completed" not in st.session_state:
+    st.session_state.forecast_completed = False
+
+if run_button and not st.session_state.forecast_running:
+
+    # Reset previous run
+    st.session_state.forecast_completed = False
+    st.session_state.forecast_error = False
+    st.session_state.models_trained = False
+    st.session_state.predictions = {}
+    st.session_state.results = None
+
+    # Run only once
+    run_forecast(
+        ticker=ticker,
+        start_date=start_date,
+        end_date=end_date,
+        use_arima=use_arima,
+        use_prophet=use_prophet,
+        use_lstm=use_lstm,
+        test_size=test_size,
+        lookback=lookback,
+        lstm_epochs=lstm_epochs,
+    )
+
+    # DO NOT CALL st.rerun() HERE
 
 # ============================================
 # FOOTER
