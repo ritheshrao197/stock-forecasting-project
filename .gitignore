@@ -244,7 +244,7 @@ tmp/
 temp/
 
 # Streamlit specific
-.streamlit/
+# .streamlit/
 .streamlit_cache/
 
 # ============================================
