@@ -2,6 +2,7 @@
 ARIMA Model Implementation
 """
 
+import logging
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +12,8 @@ from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from pmdarima import auto_arima
 import warnings
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
 
 class ARIMAModel:
     """
