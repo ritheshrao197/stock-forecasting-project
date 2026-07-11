@@ -157,3 +157,35 @@ def get_ticker_options():
                 "category": category
             })
     return sorted(options, key=lambda x: x["label"])
+
+def get_all_tickers():
+    """Get list of all available ticker symbols"""
+    tickers = []
+    for category_tickers in TICKER_CATEGORIES.values():
+        tickers.extend(category_tickers.keys())
+    return tickers
+
+def validate_settings():
+    """Validate all settings are properly configured
+    
+    Returns:
+    --------
+    bool: True if all settings are valid
+    """
+    errors = []
+    
+    if not APP_TITLE:
+        errors.append("APP_TITLE is not set")
+    if DEFAULT_TEST_SIZE <= 0 or DEFAULT_TEST_SIZE >= 1:
+        errors.append("DEFAULT_TEST_SIZE must be between 0 and 1")
+    if DEFAULT_LOOKBACK < 5:
+        errors.append("DEFAULT_LOOKBACK must be at least 5")
+    if MAX_LOG_ENTRIES < 10:
+        errors.append("MAX_LOG_ENTRIES must be at least 10")
+    
+    if errors:
+        for error in errors:
+            print(f"Settings Error: {error}")
+        return False
+    
+    return True
