@@ -37,6 +37,17 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
+# Import TensorFlow and configure threading to prevent hangs on Windows
+try:
+    import tensorflow as tf
+    # Limit TensorFlow to single thread to prevent deadlocks with Streamlit
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+    tf = None
+
 warnings.filterwarnings('ignore')
 
 # ============================================
@@ -483,7 +494,11 @@ def generate_report(ticker, market_type, start_date, end_date, data, results, pr
 </body>
 </html>"""
 
-    html_path = report_dir / "report.html"
+    # Generate descriptive filename with date range
+    start_str = start_date.strftime("%Y%m%d") if hasattr(start_date, 'strftime') else str(start_date).replace('-', '')
+    end_str = end_date.strftime("%Y%m%d") if hasattr(end_date, 'strftime') else str(end_date).replace('-', '')
+    html_filename = f"{safe_ticker}_{start_str}_{end_str}_report.html"
+    html_path = report_dir / html_filename
     html_bytes = html.encode("utf-8")
     html_path.write_bytes(html_bytes)
 
@@ -691,7 +706,6 @@ with st.sidebar:
             if st.button(label, use_container_width=True, key=f"preset_{label}"):
                 st.session_state.start_date = datetime.now() - timedelta(days=days)
                 st.session_state.end_date = datetime.now()
-                st.rerun()
 
     col1, col2 = st.columns(2)
     with col1:
@@ -700,6 +714,10 @@ with st.sidebar:
     with col2:
         end_date = st.date_input("End", value=st.session_state.end_date, key="end_date_input")
         st.session_state.end_date = end_date
+    
+    # Normalize date types to datetime for consistency
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
     
     st.divider()
     
@@ -731,6 +749,10 @@ with st.sidebar:
         disabled=st.session_state.forecast_running,
         type="primary"
     )
+    
+    # Set trigger flag when button is clicked
+    if run_button:
+        st.session_state.trigger_forecast = True
     
     st.caption("📌 v2.0 | ARIMA · Prophet · LSTM")
 
@@ -1180,9 +1202,7 @@ def train_arima_optimized(train_data, test_len):
 
 def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
                   test_size, lookback, lstm_epochs):
-    st.session_state.forecast_running = True
-    st.session_state.forecast_completed = False
-    st.session_state.forecast_error = False
+    # Initialize logs (state flags are set by caller)
     st.session_state.logs = []
     
     # FIX: live-updating progress. render_status_html() writes directly into the
@@ -1383,65 +1403,39 @@ def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
                     pct_base = pct
                     pct_span = (85 - pct)  # LSTM's slice of the overall progress bar
 
-                    # Live per-epoch feedback so the UI doesn't sit silent for the
-                    # whole training run.
+                    # Live per-epoch feedback - update session_state with progress
                     class StreamlitEpochLogger(tf.keras.callbacks.Callback):
                         def on_epoch_end(self, epoch, logs=None):
                             loss = (logs or {}).get('loss')
-                            epoch_pct = pct_base + (epoch + 1) / n_epochs * pct_span
-                            stage = f"Training LSTM — epoch {epoch + 1}/{n_epochs}"
+                            # Update progress
+                            progress = pct_base + ((epoch + 1) / n_epochs) * pct_span
+                            st.session_state.progress = progress
+                            st.session_state.current_process = f"LSTM Epoch {epoch + 1}/{n_epochs}"
                             if loss is not None:
-                                stage += f" (loss: {loss:.4f})"
-                            set_progress(epoch_pct, stage)
-                            add_log(f"   Epoch {epoch + 1}/{n_epochs} - loss: {loss:.4f}" if loss is not None
-                                    else f"   Epoch {epoch + 1}/{n_epochs}", "info")
+                                add_log(f"   Epoch {epoch + 1}/{n_epochs} - loss: {loss:.4f}", "info")
+                            else:
+                                add_log(f"   Epoch {epoch + 1}/{n_epochs}", "info")
 
-                    # FIX: run .fit() in a background thread with a hard timeout so a
-                    # hang (TF resource contention, a slow/loaded machine, etc.) can
-                    # never freeze the whole app again. If it doesn't finish in time we
-                    # abandon LSTM and still return ARIMA/Prophet results below.
-                    LSTM_TIMEOUT_SECONDS = 120
-                    fit_outcome = {}
-
-                    def _fit_worker():
-                        try:
-                            fit_outcome['history'] = model.fit(
-                                X_train, y_train,
-                                epochs=n_epochs,
-                                batch_size=32,
-                                verbose=0,
-                                callbacks=[early_stop, StreamlitEpochLogger()]
-                            )
-                        except Exception as fit_err:
-                            fit_outcome['error'] = fit_err
-
-                    fit_thread = threading.Thread(target=_fit_worker, daemon=True)
-                    if add_script_run_ctx is not None:
-                        # Lets the worker thread safely update session_state / the
-                        # status placeholder via the callback above.
-                        ctx = get_script_run_ctx()
-                        if ctx is not None:
-                            add_script_run_ctx(fit_thread, ctx)
-                    fit_thread.start()
-                    fit_thread.join(timeout=LSTM_TIMEOUT_SECONDS)
-
-                    if fit_thread.is_alive():
-                        add_log(f"⚠️ LSTM training exceeded {LSTM_TIMEOUT_SECONDS}s and was abandoned. "
-                                f"Skipping LSTM for this run — ARIMA/Prophet results are unaffected.", "warning")
-                        # Thread is daemonized so it won't block the app; it'll keep
-                        # running in the background and get garbage-collected eventually.
-                    elif 'error' in fit_outcome:
-                        raise fit_outcome['error']
-                    else:
-                        add_log("   Generating predictions...", "info")
-                        pred_scaled = model.predict(X_test, verbose=0)
-                        pred = scaler.inverse_transform(
-                            np.concatenate([pred_scaled, np.zeros((len(pred_scaled), 1))], axis=1)
-                        )[:, 0]
+                    # Run model.fit() directly - no threading needed for small models
+                    try:
+                        add_log("   Starting model.fit()...", "info")
+                        history = model.fit(
+                            X_train, y_train,
+                            epochs=n_epochs,
+                            batch_size=32,
+                            verbose=0,
+                            callbacks=[early_stop, StreamlitEpochLogger()]
+                        )
+                        add_log("   ✓ Finished model.fit()", "success")
                         
-                        # Align length to `test` exactly (test set now matches by
-                        # construction, but guard for the lookback edge-case where a
-                        # few leading rows are lost).
+                        add_log("   Starting model.predict()...", "info")
+                        pred_scaled = model.predict(X_test, verbose=0)
+                        add_log("   ✓ Finished model.predict()", "success")
+                        
+                        # Scaler was fitted on 1 feature (Close), so inverse_transform expects (n, 1)
+                        pred = scaler.inverse_transform(pred_scaled).flatten()
+                        
+                        # Align length to `test` exactly
                         if len(pred) < len(test):
                             pad_n = len(test) - len(pred)
                             pred = np.concatenate([np.full(pad_n, pred[0] if len(pred) else np.nan), pred])
@@ -1458,8 +1452,12 @@ def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
                         results.append({'Model': 'LSTM', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
                         add_log(f"✅ LSTM complete (RMSE: {rmse:.2f})", "success")
                     
-                    tf.keras.backend.clear_session()
-                    gc.collect()
+                    except Exception as fit_err:
+                        add_log(f"⚠️ LSTM training failed: {str(fit_err)[:80]}", "warning")
+                    
+                    finally:
+                        tf.keras.backend.clear_session()
+                        gc.collect()
                 else:
                     add_log("⚠️ Not enough data for LSTM given this lookback/test split", "warning")
             except Exception as e:
@@ -1475,22 +1473,23 @@ def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
         # ============================================
         set_progress(95, "Finalizing")
         
-        st.session_state.results = pd.DataFrame(results)
+        results_df = pd.DataFrame(results)
+        st.session_state.results = results_df
         st.session_state.models_trained = True
         st.session_state.forecast_completed = True
         st.session_state.progress = 100
         st.session_state.current_process = "Complete"
         
-        add_log(f"✅ Analysis complete! {len(results)} models trained", "success")
+        add_log(f"✅ Analysis complete! {len(results_df)} models trained", "success")
         
-        if len(results) > 0:
-            best = results[int(np.argmin([r['RMSE'] for r in results]))]
+        if len(results_df) > 0:
+            best = results_df.loc[results_df['RMSE'].idxmin()]
             add_log(f"🏆 Best: {best['Model']} (RMSE: {best['RMSE']:.2f})", "success")
         else:
             add_log("⚠️ No model produced valid results", "warning")
             st.session_state.forecast_error = True
         
-        render_status_html("complete" if results else "error")
+        render_status_html("complete" if len(results_df) > 0 else "error")
         
     except Exception as e:
         add_log(f"❌ Error: {str(e)}", "error")
@@ -1503,26 +1502,25 @@ def run_forecast(ticker, start_date, end_date, use_arima, use_prophet, use_lstm,
     st.session_state.forecast_running = False
 
 # ============================================
-# TRIGGER FORECAST (FIXED)
+# RUN FORECAST (AFTER FUNCTION DEFINITIONS)
 # ============================================
 
-# Initialize state
-if "forecast_running" not in st.session_state:
-    st.session_state.forecast_running = False
+# Run forecast only when trigger flag is set
+if (
+    st.session_state.trigger_forecast
+    and not st.session_state.forecast_running
+):
 
-if "forecast_completed" not in st.session_state:
-    st.session_state.forecast_completed = False
+    # Reset trigger flag FIRST to prevent loop
+    st.session_state.trigger_forecast = False
+    st.session_state.forecast_running = True
 
-if run_button and not st.session_state.forecast_running:
-
-    # Reset previous run
     st.session_state.forecast_completed = False
     st.session_state.forecast_error = False
     st.session_state.models_trained = False
     st.session_state.predictions = {}
     st.session_state.results = None
 
-    # Run only once
     run_forecast(
         ticker=ticker,
         start_date=start_date,
@@ -1534,8 +1532,11 @@ if run_button and not st.session_state.forecast_running:
         lookback=lookback,
         lstm_epochs=lstm_epochs,
     )
-
-    # DO NOT CALL st.rerun() HERE
+    
+    # Rerun once to refresh UI with updated data
+    # Safe because trigger_forecast is already False, so no infinite loop
+    st.session_state.forecast_running = False
+    st.rerun()
 
 # ============================================
 # FOOTER
