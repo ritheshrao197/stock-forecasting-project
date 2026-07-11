@@ -2,8 +2,13 @@
 UI Components for Stock Market Forecasting App
 """
 
+# Import sidebar directly
 from ui.sidebar import render_sidebar
+
+# Import components
 from ui.components import render_metric_card, render_plotly_chart, render_dataframe
+
+# Import tab modules
 from ui.tabs.data_overview import render_data_overview
 from ui.tabs.model_results import render_model_results
 from ui.tabs.predictions import render_predictions
