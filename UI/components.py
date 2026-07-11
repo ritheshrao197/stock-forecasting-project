@@ -95,3 +95,35 @@ def render_info_box(title, message, icon="ℹ️"):
         <p style="margin: 0.5rem 0 0 0;">{message}</p>
     </div>
     """, unsafe_allow_html=True)
+
+def render_loading_spinner(message="Loading..."):
+    """Render a loading spinner with message
+    
+    Parameters:
+    -----------
+    message : str
+        Loading message to display
+    """
+    with st.spinner(message):
+        pass
+
+def render_success_banner(message):
+    """Render a success banner
+    
+    Parameters:
+    -----------
+    message : str
+        Success message to display
+    """
+    st.markdown(f"""
+    <div style="
+        background-color: #d4edda;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #28a745;
+        margin: 0.5rem 0;
+        color: #155724;
+    ">
+        ✅ <strong>{message}</strong>
+    </div>
+    """, unsafe_allow_html=True)
