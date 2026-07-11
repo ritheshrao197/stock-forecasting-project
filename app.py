@@ -19,6 +19,9 @@ import traceback
 import os
 import threading
 import gc
+import io
+import base64
+from pathlib import Path
 
 # Used to run LSTM training with a hard timeout in a background thread while still
 # letting that thread safely call st.* / write to session_state. Wrapped in try/except
@@ -327,8 +330,168 @@ def get_currency_symbol(ticker):
     return "$"
 
 # ============================================
-# DATA FETCHING
+# REPORT GENERATION (HTML, saved locally)
 # ============================================
+
+def _save_and_encode_fig(fig, path):
+    """Save a matplotlib figure to disk AND return a base64 PNG string for embedding."""
+    fig.savefig(path, bbox_inches="tight", dpi=110)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=110)
+    buf.seek(0)
+    encoded = base64.b64encode(buf.read()).decode("utf-8")
+    plt.close(fig)
+    return encoded
+
+def generate_report(ticker, market_type, start_date, end_date, data, results, predictions, test_size):
+    """
+    Builds a self-contained HTML report (charts embedded as base64 PNGs, so it opens
+    correctly with no internet connection or extra files) and saves it, along with the
+    individual chart PNGs and the underlying data as CSVs, to:
+        reports/<TICKER>_<timestamp>/
+    Returns a dict with paths and the raw HTML bytes (for the in-app download button).
+    """
+    currency = get_currency_symbol(ticker)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_ticker = ticker.replace('^', 'idx_').replace('.', '_')
+    report_dir = REPORTS_DIR / f"{safe_ticker}_{timestamp}"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    images = {}
+
+    # --- Price history ---
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(data.index, data['Close'], color='#667eea', linewidth=1.5)
+    ax.fill_between(data.index, data['Close'], data['Close'].min(), color='#667eea', alpha=0.08)
+    ax.set_title(f"{ticker} - Price History")
+    ax.set_ylabel(f"Price ({currency})")
+    ax.grid(True, alpha=0.3)
+    images['price_history'] = _save_and_encode_fig(fig, report_dir / "price_history.png")
+
+    # --- Model comparison (RMSE / MAPE) ---
+    if results is not None and not results.empty:
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        colors = ['#667eea', '#764ba2', '#f093fb'][:len(results)]
+        axes[0].bar(results['Model'], results['RMSE'], color=colors)
+        axes[0].set_title('RMSE Comparison')
+        axes[0].set_ylabel(f'RMSE ({currency})')
+        axes[0].grid(True, alpha=0.3)
+        axes[1].bar(results['Model'], results['MAPE'], color=colors)
+        axes[1].set_title('MAPE Comparison')
+        axes[1].set_ylabel('MAPE (%)')
+        axes[1].grid(True, alpha=0.3)
+        fig.tight_layout()
+        images['model_comparison'] = _save_and_encode_fig(fig, report_dir / "model_comparison.png")
+
+    # --- Predictions vs actual ---
+    predictions_csv_df = None
+    if predictions:
+        train_size = int(len(data) * (1 - test_size))
+        test_data = data['Close'][train_size:]
+
+        fig, ax = plt.subplots(figsize=(11, 4.5))
+        ax.plot(test_data.index, test_data.values, color='#1a1a2e', linewidth=2, label='Actual')
+        colors = ['#667eea', '#764ba2', '#f093fb']
+        predictions_csv_df = pd.DataFrame({'Date': test_data.index, 'Actual': test_data.values})
+        for i, (name, pred) in enumerate(predictions.items()):
+            if len(pred) > 0:
+                pred = np.asarray(pred)[:len(test_data)]
+                ax.plot(test_data.index[:len(pred)], pred, linestyle='--', linewidth=1.5,
+                        color=colors[i % len(colors)], label=name)
+                col = pd.Series(pred, index=test_data.index[:len(pred)])
+                predictions_csv_df[name] = col.reindex(predictions_csv_df['Date']).values
+        ax.set_title(f'{ticker} - Forecast vs Actual')
+        ax.set_ylabel(f'Price ({currency})')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        images['predictions'] = _save_and_encode_fig(fig, report_dir / "predictions_vs_actual.png")
+
+        predictions_csv_df.to_csv(report_dir / "predictions.csv", index=False)
+
+    # --- Save underlying data as CSVs ("other files") ---
+    data.to_csv(report_dir / "price_history.csv")
+    if results is not None and not results.empty:
+        results.to_csv(report_dir / "model_results.csv", index=False)
+
+    # --- Build HTML ---
+    best_model_html = ""
+    if results is not None and not results.empty:
+        best = results.loc[results['RMSE'].idxmin()]
+        best_model_html = f"""
+        <div class="best-model">
+            <div class="label">🏆 Best Performing Model</div>
+            <div class="name">{best['Model']}</div>
+            <div class="stats">RMSE: {currency}{best['RMSE']:.2f} &nbsp;·&nbsp; MAPE: {best['MAPE']:.2f}% &nbsp;·&nbsp; R²: {best['R²']:.4f}</div>
+        </div>
+        """
+
+    results_table_html = results.to_html(index=False, classes="data-table", border=0) if results is not None and not results.empty else "<p>No model results available.</p>"
+
+    def img_block(key, title):
+        if key not in images:
+            return ""
+        return f"""
+        <div class="chart-block">
+            <h3>{title}</h3>
+            <img src="data:image/png;base64,{images[key]}" />
+        </div>
+        """
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StockForge Report - {ticker}</title>
+<style>
+    body {{ font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #f8f9fa; color: #1a1a2e; margin: 0; padding: 2rem; }}
+    .container {{ max-width: 960px; margin: 0 auto; background: white; border-radius: 12px; padding: 2rem 2.5rem; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }}
+    .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem; }}
+    .header h1 {{ margin: 0 0 0.3rem 0; font-size: 1.6rem; }}
+    .header .meta {{ opacity: 0.85; font-size: 0.9rem; }}
+    .best-model {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.2rem 1.5rem; border-radius: 10px; margin: 1.5rem 0; }}
+    .best-model .label {{ font-size: 0.8rem; opacity: 0.85; }}
+    .best-model .name {{ font-size: 1.5rem; font-weight: 700; }}
+    .chart-block {{ margin: 2rem 0; }}
+    .chart-block h3 {{ font-size: 1.05rem; color: #333; margin-bottom: 0.6rem; }}
+    .chart-block img {{ width: 100%; border-radius: 8px; border: 1px solid #eee; }}
+    table.data-table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
+    table.data-table th, table.data-table td {{ padding: 0.5rem 0.8rem; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9rem; }}
+    table.data-table th {{ background: #f8f9fa; font-weight: 600; }}
+    .footer {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee; color: #999; font-size: 0.75rem; }}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📊 StockForge Report — {ticker}</h1>
+        <div class="meta">{market_type} Market &nbsp;·&nbsp; {start_date} to {end_date} &nbsp;·&nbsp; Generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+    </div>
+
+    {best_model_html}
+
+    <h2>Model Performance</h2>
+    {results_table_html}
+
+    {img_block('model_comparison', 'RMSE / MAPE Comparison')}
+    {img_block('price_history', 'Price History')}
+    {img_block('predictions', 'Predictions vs Actual')}
+
+    <div class="footer">
+        Generated by StockForge v2.0. Companion files (chart PNGs, price history CSV, model results CSV, predictions CSV) saved alongside this report in the same folder.
+    </div>
+</div>
+</body>
+</html>"""
+
+    html_path = report_dir / "report.html"
+    html_bytes = html.encode("utf-8")
+    html_path.write_bytes(html_bytes)
+
+    return {
+        "report_dir": report_dir,
+        "html_path": html_path,
+        "html_bytes": html_bytes,
+    }
 
 # FIX: Yahoo aggressively rate-limits/blocks non-browser traffic, which surfaces as
 # "No timezone found, symbol may be delisted" / "Expecting value: line 1 column 1"
@@ -344,6 +507,10 @@ def _get_yf_session():
         # `pip install curl_cffi` is strongly recommended if you keep seeing
         # "No timezone found" errors for every ticker.
         return None
+
+# ============================================
+# DATA FETCHING
+# ============================================
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data(ticker, start_date, end_date):
@@ -437,6 +604,11 @@ if 'start_date' not in st.session_state:
     st.session_state.start_date = datetime(2021, 1, 1)
 if 'end_date' not in st.session_state:
     st.session_state.end_date = datetime.now()
+if 'last_report' not in st.session_state:
+    st.session_state.last_report = None
+
+REPORTS_DIR = Path("reports")
+REPORTS_DIR.mkdir(exist_ok=True)
 
 # ============================================
 # SIDEBAR
@@ -629,6 +801,33 @@ elif st.session_state.forecast_error:
     render_status_html("error")
 else:
     render_status_html("idle")
+
+# ============================================
+# SAVE REPORT (HTML, written to local ./reports/ folder on demand)
+# ============================================
+
+if (st.session_state.forecast_completed and st.session_state.data is not None
+        and st.session_state.results is not None):
+    save_col1, save_col2 = st.columns([1, 3])
+    with save_col1:
+        if st.button("💾 Save Report", use_container_width=True):
+            with st.spinner("Building report..."):
+                st.session_state.last_report = generate_report(
+                    ticker, st.session_state.market_type, start_date, end_date,
+                    st.session_state.data, st.session_state.results,
+                    st.session_state.predictions, test_size
+                )
+    with save_col2:
+        info = st.session_state.last_report
+        if info is not None:
+            st.success(f"✅ Saved to `{info['report_dir']}` (report.html + chart PNGs + CSVs)")
+            st.download_button(
+                "⬇️ Download report.html",
+                data=info["html_bytes"],
+                file_name=info["html_path"].name,
+                mime="text/html",
+                use_container_width=False,
+            )
 
 # ============================================
 # TABS
