@@ -69,20 +69,52 @@ st.set_page_config(
 )
 
 # Custom CSS
+# In app.py, after st.set_page_config()
 st.markdown("""
 <style>
-.main-header {
-    font-size: 2.5rem;
-    color: #1f77b4;
-    text-align: center;
-    margin-bottom: 1rem;
-}
-.sub-header {
-    font-size: 1.5rem;
-    color: #2c3e50;
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-}
+    /* Fix sidebar scrolling */
+    section[data-testid="stSidebar"] {
+        height: 100vh !important;
+        overflow-y: auto !important;
+    }
+    
+    section[data-testid="stSidebar"] > div {
+        height: 100% !important;
+        overflow-y: auto !important;
+        padding-bottom: 3rem !important;
+    }
+    
+    /* Ensure the sidebar content is fully visible */
+    .css-1d391kg {
+        height: 100vh !important;
+        overflow-y: auto !important;
+    }
+    
+    /* Make scrollbar visible */
+    section[data-testid="stSidebar"]::-webkit-scrollbar {
+        width: 8px !important;
+    }
+    
+    section[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
+        background: #666 !important;
+        border-radius: 4px !important;
+    }
+    
+    /* Hide footer */
+    footer {
+        display: none !important;
+    }
+    
+    /* Compact sidebar elements */
+    .stSubheader {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.2rem !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .stMarkdown {
+        margin-bottom: 0.2rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
