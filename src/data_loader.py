@@ -103,6 +103,35 @@ class StockDataLoader:
         
         return self.data
 
+    def validate_data(self, df: pd.DataFrame) -> bool:
+        """Validate data quality
+        
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            Data to validate
+            
+        Returns:
+        --------
+        bool: True if data passes validation
+        """
+        if df is None or df.empty:
+            logger.error("Data is empty or None")
+            return False
+        
+        required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        missing = [col for col in required_columns if col not in df.columns]
+        if missing:
+            logger.error(f"Missing required columns: {missing}")
+            return False
+        
+        if df['Close'].isnull().sum() > len(df) * 0.1:
+            logger.warning("More than 10% null values in Close column")
+            return False
+        
+        logger.info("Data validation passed")
+        return True
+
 
 if __name__ == "__main__":
     # Test the data loader
