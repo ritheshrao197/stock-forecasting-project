@@ -36,6 +36,14 @@ DEFAULT_EPOCHS = 20
 MAX_LOG_ENTRIES = 200
 LOG_AUTO_REFRESH_INTERVAL = 3  # seconds
 
+# Performance settings
+ENABLE_CACHE = os.getenv("ENABLE_CACHE", "true").lower() == "true"
+DATA_CACHE_TTL = int(os.getenv("DATA_CACHE_TTL", "3600"))  # 1 hour default
+
+# Display settings
+CHART_HEIGHT = int(os.getenv("CHART_HEIGHT", "400"))
+CHART_TEMPLATE = os.getenv("CHART_TEMPLATE", "plotly_white")
+
 # Ticker categories (moved from main app)
 TICKER_CATEGORIES = {
     "📊 US Stock Indices": {
