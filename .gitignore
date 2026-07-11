@@ -214,7 +214,7 @@ data/
 *.sqlite3
 
 # Model files (large)
-models/
+/models/
 *.pkl
 *.h5
 *.pb
