@@ -69,18 +69,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize session state
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'predictions' not in st.session_state:
-    st.session_state.predictions = {}
-if 'results' not in st.session_state:
-    st.session_state.results = None
-if 'models_trained' not in st.session_state:
-    st.session_state.models_trained = False
-if 'logs' not in st.session_state:
-    st.session_state.logs = []
-if 'is_running' not in st.session_state:
-    st.session_state.is_running = False
+SESSION_STATE_KEYS = {
+    'data': None,
+    'predictions': {},
+    'results': None,
+    'models_trained': False,
+    'logs': [],
+    'is_running': False,
+    'forecast_count': 0
+}
+
+for key, default_value in SESSION_STATE_KEYS.items():
+    if key not in st.session_state:
+        st.session_state[key] = default_value
 
 # ============================================
 # SIDEBAR
