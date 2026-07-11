@@ -13,9 +13,16 @@ import os
 logger = logging.getLogger(__name__)
 
 class StockDataLoader:
-    """A comprehensive data loader for stock market data"""
+    """A comprehensive data loader for stock market data
     
-    def __init__(self, ticker="^GSPC", start_date="2018-01-01", end_date=None):
+    Attributes:
+        ticker: Stock ticker symbol
+        start_date: Start date for data fetch
+        end_date: End date for data fetch
+        data: Fetched stock data
+    """
+    
+    def __init__(self, ticker: str = "^GSPC", start_date: str = "2018-01-01", end_date: str = None):
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date or datetime.now().strftime("%Y-%m-%d")
