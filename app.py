@@ -3,12 +3,20 @@ Stock Market Price Forecasting - Interactive Web UI
 Main Entry Point
 """
 
+import logging
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Configuration
 from config.settings import APP_TITLE, APP_ICON, APP_LAYOUT
@@ -241,3 +249,148 @@ if config['run_button']:
                     
                     log_success(f"✅ ARIMA training complete!")
                     log_info(f"   RMSE: {rmse:.4f}")
+                    log_info(f"   MAPE: {mape:.2f}%")
+                    log_info(f"   R²: {r2:.4f}")
+                    
+                except Exception as e:
+                    log_error(f"❌ ARIMA model failed: {str(e)}")
+            
+            # ============================================
+            # Prophet
+            # ============================================
+            if config['use_prophet']:
+                log_header("="*50)
+                log_header("🤖 Step 4: Training Prophet Model")
+                log_header("="*50)
+                
+                try:
+                    prophet_data = data.copy()
+                    prophet_data.index = prophet_data.index.tz_localize(None)
+                    
+                    prophet = ProphetModel(prophet_data)
+                    prophet.split_data(test_size=config['test_size'])
+                    log_info("   Fitting Prophet model...")
+                    
+                    with OutputCapture() as capture:
+                        prophet.fit(yearly_seasonality=True, weekly_seasonality=True)
+                        prophet.predict(periods=len(test))
+                    
+                    prophet_pred = prophet.forecast['yhat'].values[-len(test):]
+                    st.session_state.predictions['Prophet'] = prophet_pred
+                    
+                    rmse = np.sqrt(np.mean((test['Close'].values - prophet_pred)**2))
+                    mae = np.mean(np.abs(test['Close'].values - prophet_pred))
+                    mape = np.mean(np.abs((test['Close'].values - prophet_pred) / test['Close'].values)) * 100
+                    r2 = 1 - (np.sum((test['Close'].values - prophet_pred)**2) / 
+                             np.sum((test['Close'].values - np.mean(test['Close'].values))**2))
+                    
+                    results.append({'Model': 'Prophet', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
+                    
+                    log_success(f"✅ Prophet training complete!")
+                    log_info(f"   RMSE: {rmse:.4f}")
+                    log_info(f"   MAPE: {mape:.2f}%")
+                    log_info(f"   R²: {r2:.4f}")
+                    
+                except Exception as e:
+                    log_error(f"❌ Prophet model failed: {str(e)}")
+            
+            # ============================================
+            # LSTM
+            # ============================================
+            if config['use_lstm']:
+                log_header("="*50)
+                log_header("🤖 Step 5: Training LSTM Model")
+                log_header("="*50)
+                
+                try:
+                    feature_cols = ['Close', 'SMA_20', 'RSI', 'Volume', 'Volatility']
+                    
+                    max_lookback = min(config['lookback'], len(data) // 5)
+                    if config['lookback'] > max_lookback:
+                        log_warning(f"   Reducing lookback from {config['lookback']} to {max_lookback} due to data size")
+                        lookback_actual = max_lookback
+                    else:
+                        lookback_actual = config['lookback']
+                    
+                    units_list = eval(config['lstm_units'])
+                    log_info(f"   Architecture: {units_list} units")
+                    log_info(f"   Lookback: {lookback_actual} days")
+                    log_info(f"   Epochs: {config['lstm_epochs']}")
+                    
+                    lstm = LSTMModel(lookback=lookback_actual, n_features=len(feature_cols))
+                    log_info("   Preparing data for LSTM...")
+                    
+                    with OutputCapture() as capture:
+                        lstm.prepare_data(data, target_column='Close', 
+                                        feature_columns=feature_cols, test_size=config['test_size'])
+                        lstm.build_model(lstm_units=units_list, dropout_rate=0.2)
+                        log_info("   Training LSTM neural network...")
+                        lstm.train(epochs=config['lstm_epochs'], batch_size=16, validation_split=0.1)
+                    
+                    lstm_pred = lstm.predict(inverse_transform=True)
+                    
+                    if len(lstm_pred) > 0:
+                        if len(lstm_pred) < len(test):
+                            lstm_pred = np.pad(lstm_pred, (0, len(test) - len(lstm_pred)), mode='edge')
+                        elif len(lstm_pred) > len(test):
+                            lstm_pred = lstm_pred[:len(test)]
+                        
+                        st.session_state.predictions['LSTM'] = lstm_pred
+                        
+                        rmse = np.sqrt(np.mean((test['Close'].values - lstm_pred)**2))
+                        mae = np.mean(np.abs(test['Close'].values - lstm_pred))
+                        mape = np.mean(np.abs((test['Close'].values - lstm_pred) / test['Close'].values)) * 100
+                        r2 = 1 - (np.sum((test['Close'].values - lstm_pred)**2) / 
+                                 np.sum((test['Close'].values - np.mean(test['Close'].values))**2))
+                        
+                        results.append({'Model': 'LSTM', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
+                        
+                        log_success(f"✅ LSTM training complete!")
+                        log_info(f"   RMSE: {rmse:.4f}")
+                        log_info(f"   MAPE: {mape:.2f}%")
+                        log_info(f"   R²: {r2:.4f}")
+                    else:
+                        log_warning("   LSTM predictions not available - skipping evaluation")
+                        
+                except Exception as e:
+                    log_error(f"❌ LSTM model failed: {str(e)}")
+            
+            # ============================================
+            # Complete
+            # ============================================
+            log_header("="*50)
+            log_header("✅ FORECAST COMPLETE!")
+            log_header("="*50)
+            log_success(f"🎯 {len(results)} models trained successfully")
+            
+            results_df = pd.DataFrame(results)
+            st.session_state.results = results_df
+            st.session_state.models_trained = True
+            
+            st.success(f"✅ Forecast complete! {len(results)} models trained successfully.")
+            st.balloons()
+            
+            if len(results) > 0:
+                best = st.session_state.results.loc[st.session_state.results['RMSE'].idxmin()]
+                log_success(f"🏆 Best Model: {best['Model']} (RMSE: {best['RMSE']:.4f})")
+                st.info(f"🏆 Best Model: **{best['Model']}** (RMSE: {best['RMSE']:.4f})")
+            
+            st.session_state.is_running = False
+            st.rerun()
+            
+        except Exception as e:
+            log_error(f"❌ Error: {str(e)}")
+            st.error(f"❌ Error: {str(e)}")
+            st.exception(e)
+            st.session_state.is_running = False
+
+# ============================================
+# Footer
+# ============================================
+
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; font-size: 0.8rem;">
+    Built with ❤️ using Streamlit | Stock Market Price Forecasting
+</div>
+""", unsafe_allow_html=True)
