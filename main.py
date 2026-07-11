@@ -27,6 +27,24 @@ def create_directories():
         os.makedirs(d, exist_ok=True)
     print("Directories created")
 
+def parse_args():
+    """Parse command line arguments
+    
+    Returns:
+    --------
+    argparse.Namespace: Parsed arguments
+    """
+    parser = argparse.ArgumentParser(description='Stock Market Price Forecasting Pipeline')
+    parser.add_argument('--ticker', type=str, default='^GSPC', help='Stock ticker symbol')
+    parser.add_argument('--start-date', type=str, default='2020-01-01', help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--test-size', type=float, default=0.2, help='Test set size (0.1-0.3)')
+    parser.add_argument('--lookback', type=int, default=60, help='LSTM lookback period')
+    parser.add_argument('--epochs', type=int, default=20, help='LSTM training epochs')
+    parser.add_argument('--no-arima', action='store_true', help='Skip ARIMA model')
+    parser.add_argument('--no-prophet', action='store_true', help='Skip Prophet model')
+    parser.add_argument('--no-lstm', action='store_true', help='Skip LSTM model')
+    return parser.parse_args()
+
 def run_pipeline():
     """Main pipeline execution"""
     print("="*70)
