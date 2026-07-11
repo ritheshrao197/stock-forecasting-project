@@ -1,17 +1,81 @@
 """
-Sidebar configuration for the Streamlit app
+Sidebar configuration for the Streamlit app - Full Height
 """
 
 import streamlit as st
 from datetime import datetime, timedelta
 from config.settings import get_ticker_options
 
+# Check if LSTM is available
+try:
+    from src.models.lstm_model import is_lstm_available
+    LSTM_AVAILABLE = is_lstm_available()
+except:
+    LSTM_AVAILABLE = False
+
 def render_sidebar():
-    """Render the sidebar with all configuration options"""
+    """Render the sidebar with all configuration options - Full Height"""
+    
+    # Apply custom CSS for full height sidebar
+    st.markdown("""
+    <style>
+        /* Make sidebar full height */
+        section[data-testid="stSidebar"] {
+            height: 100vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+        }
+        
+        /* Remove bottom padding and allow content to fill */
+        section[data-testid="stSidebar"] > div {
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        
+        /* Make the main content area fill remaining space */
+        section[data-testid="stSidebar"] .stMarkdown {
+            flex: 1 !important;
+        }
+        
+        /* Push the button to the bottom */
+        .sidebar-bottom {
+            margin-top: auto !important;
+            padding-bottom: 1rem !important;
+        }
+        
+        /* Improve scrollbar appearance */
+        section[data-testid="stSidebar"]::-webkit-scrollbar {
+            width: 6px;
+        }
+        section[data-testid="stSidebar"]::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        section[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        section[data-testid="stSidebar"]::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Remove extra space at bottom */
+        .stApp > header {
+            background-color: transparent !important;
+        }
+        
+        /* Full height sidebar container */
+        .css-1d391kg {
+            height: 100vh !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
     with st.sidebar:
         # Logo/Header
-        st.markdown('<div style="text-align: center; font-size: 3rem;">📈</div>', unsafe_allow_html=True)
-        st.title("📊 Configuration")
+        st.markdown('<div style="text-align: center; font-size: 3rem; padding-top: 0.5rem;">📈</div>', unsafe_allow_html=True)
+        st.markdown('<h2 style="text-align: center; margin-bottom: 1rem;">📊 Configuration</h2>', unsafe_allow_html=True)
         
         # Stock Selection
         st.subheader("📈 Stock Selection")
@@ -30,16 +94,40 @@ def render_sidebar():
         test_size = render_parameter_controls()
         
         # LSTM Parameters
-        with st.expander("LSTM Parameters"):
-            lookback, lstm_epochs, lstm_units = render_lstm_parameters()
+        with st.expander("🧠 LSTM Parameters"):
+            lookback = st.number_input("Lookback Period", min_value=10, max_value=120, value=60, key="lookback")
+            lstm_epochs = st.number_input("Epochs", min_value=5, max_value=100, value=20, key="lstm_epochs")
+            lstm_units = st.selectbox("Hidden Units", ["[100, 50]", "[50, 25]", "[100, 50, 25]"], index=1, key="lstm_units")
         
-        # Action Buttons
+        # Spacer to push buttons to bottom
+        st.markdown('<div style="flex: 1;"></div>', unsafe_allow_html=True)
+        
+        # Action Buttons at bottom
         st.markdown("---")
-        run_button = st.button("🚀 Run Forecast", use_container_width=True)
+        
+        # Check if forecast is already running or completed
+        is_running = st.session_state.get('is_running', False)
+        forecast_completed = st.session_state.get('forecast_completed', False)
+        
+        # Disable button if running
+        run_button = st.button(
+            "🚀 Run Forecast", 
+            use_container_width=True,
+            disabled=is_running,
+            type="primary" if not is_running else "secondary"
+        )
+        
+        if is_running:
+            st.warning("⏳ Running... Please wait.")
+        elif forecast_completed:
+            st.success("✅ Completed! Rerun to update.")
         
         if st.button("🗑️ Clear Results", use_container_width=True):
             clear_all_results()
             st.rerun()
+        
+        # Version info at very bottom
+        st.caption("📌 v1.0.0 | ARIMA · Prophet · LSTM")
         
         return {
             'ticker': ticker,
@@ -73,7 +161,6 @@ def render_ticker_selector():
     
     if not filtered_options:
         filtered_options = all_options
-        st.warning("No matching tickers found. Showing all options.")
     
     ticker_options = [opt["label"] for opt in filtered_options]
     ticker_values = [opt["value"] for opt in filtered_options]
@@ -88,21 +175,19 @@ def render_ticker_selector():
         "Select Ticker Symbol",
         options=ticker_options,
         index=min(default_index, len(ticker_options) - 1),
-        help="Search above to filter tickers"
+        key="ticker_select"
     )
     
     selected_index = ticker_options.index(selected_label) if selected_label in ticker_options else 0
     ticker = ticker_values[selected_index] if ticker_values else "AAPL"
     
-    # Show category
     for opt in all_options:
         if opt["value"] == ticker:
             st.caption(f"📌 {opt['category']}")
             break
     
-    # Custom ticker
     with st.expander("➕ Enter Custom Ticker"):
-        custom_ticker = st.text_input("Custom Ticker", placeholder="e.g., BTC-USD, EURUSD=X")
+        custom_ticker = st.text_input("Custom Ticker", placeholder="e.g., BTC-USD", key="custom_ticker")
         if custom_ticker:
             ticker = custom_ticker
             st.info(f"Using custom ticker: {ticker}")
@@ -116,60 +201,62 @@ def render_date_selector():
         start_date = st.date_input(
             "Start Date",
             value=datetime(2020, 1, 1),
-            max_value=datetime.now()
+            max_value=datetime.now(),
+            key="start_date"
         )
     with col2:
         end_date = st.date_input(
             "End Date",
             value=datetime.now(),
-            max_value=datetime.now()
+            max_value=datetime.now(),
+            key="end_date"
         )
     
-    # Quick presets
-    st.subheader("⚡ Quick Date Presets")
+    st.subheader("⚡ Quick Presets")
     preset_col1, preset_col2, preset_col3 = st.columns(3)
     with preset_col1:
-        if st.button("📅 1Y"):
+        if st.button("📅 1Y", key="preset_1y"):
             start_date = datetime.now() - timedelta(days=365)
     with preset_col2:
-        if st.button("📅 2Y"):
+        if st.button("📅 2Y", key="preset_2y"):
             start_date = datetime.now() - timedelta(days=730)
     with preset_col3:
-        if st.button("📅 5Y"):
+        if st.button("📅 5Y", key="preset_5y"):
             start_date = datetime.now() - timedelta(days=1825)
     
     return start_date, end_date
 
 def render_model_selector():
     """Render model selection checkboxes"""
-    use_arima = st.checkbox("ARIMA", value=True)
-    use_prophet = st.checkbox("Prophet", value=True)
-    use_lstm = st.checkbox("LSTM", value=True)
+    use_arima = st.checkbox("ARIMA", value=True, key="use_arima")
+    use_prophet = st.checkbox("Prophet", value=True, key="use_prophet")
+    
+    if LSTM_AVAILABLE:
+        use_lstm = st.checkbox("LSTM", value=True, key="use_lstm")
+        st.caption("🧠 Deep learning model")
+    else:
+        st.warning("⚠️ LSTM disabled (TensorFlow not installed)")
+        use_lstm = False
+    
     return use_arima, use_prophet, use_lstm
 
 def render_parameter_controls():
     """Render parameter controls"""
-    test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05)
+    test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05, key="test_size")
     return test_size
-
-def render_lstm_parameters():
-    """Render LSTM specific parameters"""
-    lookback = st.number_input("Lookback Period", min_value=10, max_value=120, value=60)
-    lstm_epochs = st.number_input("Epochs", min_value=5, max_value=100, value=20)
-    lstm_units = st.selectbox("Hidden Units", ["[100, 50]", "[50, 25]", "[100, 50, 25]"], index=1)
-    return lookback, lstm_epochs, lstm_units
 
 def clear_all_results():
     """Clear all results from session state"""
-    if 'data' in st.session_state:
-        st.session_state.data = None
-    if 'predictions' in st.session_state:
-        st.session_state.predictions = {}
-    if 'results' in st.session_state:
-        st.session_state.results = None
-    if 'models_trained' in st.session_state:
-        st.session_state.models_trained = False
-    if 'logs' in st.session_state:
-        st.session_state.logs = []
-    if 'is_running' in st.session_state:
-        st.session_state.is_running = False
+    keys_to_clear = ['data', 'predictions', 'results', 'models_trained', 'logs', 'is_running', 'forecast_completed']
+    for key in keys_to_clear:
+        if key in st.session_state:
+            if key == 'predictions':
+                st.session_state[key] = {}
+            elif key in ['data', 'results', 'models_trained']:
+                st.session_state[key] = None
+            elif key == 'logs':
+                st.session_state[key] = []
+            elif key == 'forecast_completed':
+                st.session_state[key] = False
+            elif key == 'is_running':
+                st.session_state[key] = False
