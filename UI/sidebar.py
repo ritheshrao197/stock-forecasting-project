@@ -1,5 +1,5 @@
 """
-Sidebar configuration for the Streamlit app - Full Height
+Sidebar configuration for the Streamlit app - Full Visible Layout
 """
 
 import streamlit as st
@@ -14,38 +14,56 @@ except:
     LSTM_AVAILABLE = False
 
 def render_sidebar():
-    """Render the sidebar with all configuration options - Full Height"""
+    """Render the sidebar with all configuration options - Fully Visible"""
     
-    # Apply custom CSS for full height sidebar
+    # Apply custom CSS for better layout
     st.markdown("""
     <style>
-        /* Make sidebar full height */
+        /* Make sidebar full height with scroll */
         section[data-testid="stSidebar"] {
             height: 100vh !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
         }
         
-        /* Remove bottom padding and allow content to fill */
+        /* Ensure sidebar content can scroll */
         section[data-testid="stSidebar"] > div {
             height: 100% !important;
-            display: flex !important;
-            flex-direction: column !important;
+            overflow-y: auto !important;
+            padding-bottom: 2rem !important;
         }
         
-        /* Make the main content area fill remaining space */
-        section[data-testid="stSidebar"] .stMarkdown {
-            flex: 1 !important;
+        /* Make the sidebar content container scrollable */
+        .css-1d391kg {
+            height: 100vh !important;
+            overflow-y: auto !important;
         }
         
-        /* Push the button to the bottom */
-        .sidebar-bottom {
-            margin-top: auto !important;
-            padding-bottom: 1rem !important;
+        /* Better spacing */
+        .stTextInput {
+            margin-bottom: 0.25rem !important;
         }
         
-        /* Improve scrollbar appearance */
+        .stSelectbox {
+            margin-top: 0.25rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .stSubheader {
+            margin-top: 0.75rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        
+        /* Category label */
+        .category-label {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: -0.25rem;
+            margin-bottom: 0.5rem;
+            font-style: italic;
+        }
+        
+        /* Scrollbar styling */
         section[data-testid="stSidebar"]::-webkit-scrollbar {
             width: 6px;
         }
@@ -60,56 +78,158 @@ def render_sidebar():
             background: #555;
         }
         
-        /* Remove extra space at bottom */
-        .stApp > header {
-            background-color: transparent !important;
+        /* Hide footer */
+        footer {
+            display: none !important;
         }
         
-        /* Full height sidebar container */
-        .css-1d391kg {
-            height: 100vh !important;
+        /* Compact expander */
+        .streamlit-expanderHeader {
+            font-size: 0.85rem !important;
+            padding: 0.3rem 0 !important;
+        }
+        
+        /* Reduce padding in sidebar */
+        .block-container {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
         }
     </style>
     """, unsafe_allow_html=True)
     
     with st.sidebar:
-        # Logo/Header
-        st.markdown('<div style="text-align: center; font-size: 3rem; padding-top: 0.5rem;">📈</div>', unsafe_allow_html=True)
-        st.markdown('<h2 style="text-align: center; margin-bottom: 1rem;">📊 Configuration</h2>', unsafe_allow_html=True)
+        # Logo/Header - Compact
+        st.markdown('<div style="text-align: center; font-size: 2.5rem; padding-top: 0.25rem;">📈</div>', unsafe_allow_html=True)
+        st.markdown('<h3 style="text-align: center; margin-bottom: 0.75rem; color: #1f77b4;">Configuration</h3>', unsafe_allow_html=True)
         
+        # ============================================
         # Stock Selection
+        # ============================================
         st.subheader("📈 Stock Selection")
-        ticker = render_ticker_selector()
         
-        # Date Range
+        # Search bar
+        search_term = st.text_input(
+            "🔍 Search Ticker",
+            placeholder="Type company name or symbol...",
+            key="ticker_search",
+            label_visibility="collapsed"
+        )
+        
+        # Get all ticker options
+        all_options = get_ticker_options()
+        
+        if search_term:
+            filtered_options = [
+                opt for opt in all_options 
+                if search_term.lower() in opt["label"].lower() or 
+                   search_term.lower() in opt["value"].lower() or
+                   search_term.lower() in opt["category"].lower()
+            ]
+        else:
+            filtered_options = all_options
+        
+        if not filtered_options:
+            filtered_options = all_options
+            st.warning("No matching tickers found.")
+        
+        ticker_options = [opt["label"] for opt in filtered_options]
+        ticker_values = [opt["value"] for opt in filtered_options]
+        
+        default_index = 0
+        for i, opt in enumerate(filtered_options):
+            if opt["value"] == "AAPL":
+                default_index = i
+                break
+        
+        selected_label = st.selectbox(
+            "Select Ticker Symbol",
+            options=ticker_options,
+            index=min(default_index, len(ticker_options) - 1),
+            key="ticker_select",
+            label_visibility="collapsed"
+        )
+        
+        selected_index = ticker_options.index(selected_label) if selected_label in ticker_options else 0
+        ticker = ticker_values[selected_index] if ticker_values else "AAPL"
+        
+        # Show category
+        for opt in all_options:
+            if opt["value"] == ticker:
+                st.markdown(f'<div class="category-label">📌 {opt["category"]}</div>', unsafe_allow_html=True)
+                break
+        
+        # Custom ticker - Compact
+        with st.expander("➕ Custom Ticker"):
+            custom_ticker = st.text_input("Ticker", placeholder="e.g., BTC-USD", key="custom_ticker")
+            if custom_ticker:
+                ticker = custom_ticker
+                st.info(f"Using: {ticker}")
+        
+        # ============================================
+        # Date Range - Compact
+        # ============================================
         st.subheader("📅 Date Range")
-        start_date, end_date = render_date_selector()
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "Start",
+                value=datetime(2020, 1, 1),
+                max_value=datetime.now(),
+                key="start_date"
+            )
+        with col2:
+            end_date = st.date_input(
+                "End",
+                value=datetime.now(),
+                max_value=datetime.now(),
+                key="end_date"
+            )
         
+        # Quick presets - Compact
+        preset_col1, preset_col2, preset_col3 = st.columns(3)
+        with preset_col1:
+            if st.button("1Y", key="preset_1y", use_container_width=True):
+                start_date = datetime.now() - timedelta(days=365)
+        with preset_col2:
+            if st.button("2Y", key="preset_2y", use_container_width=True):
+                start_date = datetime.now() - timedelta(days=730)
+        with preset_col3:
+            if st.button("5Y", key="preset_5y", use_container_width=True):
+                start_date = datetime.now() - timedelta(days=1825)
+        
+        # ============================================
         # Model Selection
+        # ============================================
         st.subheader("🤖 Models")
-        use_arima, use_prophet, use_lstm = render_model_selector()
+        use_arima = st.checkbox("ARIMA", value=True, key="use_arima")
+        use_prophet = st.checkbox("Prophet", value=True, key="use_prophet")
         
-        # Parameters
+        if LSTM_AVAILABLE:
+            use_lstm = st.checkbox("LSTM", value=True, key="use_lstm")
+        else:
+            st.warning("⚠️ LSTM disabled")
+            use_lstm = False
+        
+        # ============================================
+        # Parameters - Compact
+        # ============================================
         st.subheader("⚙️ Parameters")
-        test_size = render_parameter_controls()
+        test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05, key="test_size")
         
-        # LSTM Parameters
+        # LSTM Parameters - Compact
         with st.expander("🧠 LSTM Parameters"):
-            lookback = st.number_input("Lookback Period", min_value=10, max_value=120, value=60, key="lookback")
+            lookback = st.number_input("Lookback", min_value=10, max_value=120, value=60, key="lookback")
             lstm_epochs = st.number_input("Epochs", min_value=5, max_value=100, value=20, key="lstm_epochs")
-            lstm_units = st.selectbox("Hidden Units", ["[100, 50]", "[50, 25]", "[100, 50, 25]"], index=1, key="lstm_units")
+            lstm_units = st.selectbox("Units", ["[100, 50]", "[50, 25]", "[100, 50, 25]"], index=1, key="lstm_units")
         
-        # Spacer to push buttons to bottom
-        st.markdown('<div style="flex: 1;"></div>', unsafe_allow_html=True)
-        
-        # Action Buttons at bottom
+        # ============================================
+        # Action Buttons
+        # ============================================
         st.markdown("---")
         
-        # Check if forecast is already running or completed
         is_running = st.session_state.get('is_running', False)
         forecast_completed = st.session_state.get('forecast_completed', False)
         
-        # Disable button if running
         run_button = st.button(
             "🚀 Run Forecast", 
             use_container_width=True,
@@ -118,16 +238,16 @@ def render_sidebar():
         )
         
         if is_running:
-            st.warning("⏳ Running... Please wait.")
+            st.info("⏳ Running...")
         elif forecast_completed:
-            st.success("✅ Completed! Rerun to update.")
+            st.success("✅ Done! Rerun to update.")
         
-        if st.button("🗑️ Clear Results", use_container_width=True):
+        if st.button("🗑️ Clear", use_container_width=True):
             clear_all_results()
             st.rerun()
         
-        # Version info at very bottom
-        st.caption("📌 v1.0.0 | ARIMA · Prophet · LSTM")
+        # Version info
+        st.caption("📌 v1.0 | ARIMA · Prophet · LSTM")
         
         return {
             'ticker': ticker,
@@ -142,108 +262,6 @@ def render_sidebar():
             'lstm_units': lstm_units,
             'run_button': run_button
         }
-
-def render_ticker_selector():
-    """Render the ticker selection dropdown"""
-    search_term = st.text_input("🔍 Search Ticker", placeholder="Type to search...", key="ticker_search")
-    
-    all_options = get_ticker_options()
-    
-    if search_term:
-        filtered_options = [
-            opt for opt in all_options 
-            if search_term.lower() in opt["label"].lower() or 
-               search_term.lower() in opt["value"].lower() or
-               search_term.lower() in opt["category"].lower()
-        ]
-    else:
-        filtered_options = all_options
-    
-    if not filtered_options:
-        filtered_options = all_options
-    
-    ticker_options = [opt["label"] for opt in filtered_options]
-    ticker_values = [opt["value"] for opt in filtered_options]
-    
-    default_index = 0
-    for i, opt in enumerate(filtered_options):
-        if opt["value"] == "AAPL":
-            default_index = i
-            break
-    
-    selected_label = st.selectbox(
-        "Select Ticker Symbol",
-        options=ticker_options,
-        index=min(default_index, len(ticker_options) - 1),
-        key="ticker_select"
-    )
-    
-    selected_index = ticker_options.index(selected_label) if selected_label in ticker_options else 0
-    ticker = ticker_values[selected_index] if ticker_values else "AAPL"
-    
-    for opt in all_options:
-        if opt["value"] == ticker:
-            st.caption(f"📌 {opt['category']}")
-            break
-    
-    with st.expander("➕ Enter Custom Ticker"):
-        custom_ticker = st.text_input("Custom Ticker", placeholder="e.g., BTC-USD", key="custom_ticker")
-        if custom_ticker:
-            ticker = custom_ticker
-            st.info(f"Using custom ticker: {ticker}")
-    
-    return ticker
-
-def render_date_selector():
-    """Render date range selector"""
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input(
-            "Start Date",
-            value=datetime(2020, 1, 1),
-            max_value=datetime.now(),
-            key="start_date"
-        )
-    with col2:
-        end_date = st.date_input(
-            "End Date",
-            value=datetime.now(),
-            max_value=datetime.now(),
-            key="end_date"
-        )
-    
-    st.subheader("⚡ Quick Presets")
-    preset_col1, preset_col2, preset_col3 = st.columns(3)
-    with preset_col1:
-        if st.button("📅 1Y", key="preset_1y"):
-            start_date = datetime.now() - timedelta(days=365)
-    with preset_col2:
-        if st.button("📅 2Y", key="preset_2y"):
-            start_date = datetime.now() - timedelta(days=730)
-    with preset_col3:
-        if st.button("📅 5Y", key="preset_5y"):
-            start_date = datetime.now() - timedelta(days=1825)
-    
-    return start_date, end_date
-
-def render_model_selector():
-    """Render model selection checkboxes"""
-    use_arima = st.checkbox("ARIMA", value=True, key="use_arima")
-    use_prophet = st.checkbox("Prophet", value=True, key="use_prophet")
-    
-    if LSTM_AVAILABLE:
-        use_lstm = st.checkbox("LSTM", value=True, key="use_lstm")
-        st.caption("🧠 Deep learning model")
-    else:
-        st.warning("⚠️ LSTM disabled (TensorFlow not installed)")
-        use_lstm = False
-    
-    return use_arima, use_prophet, use_lstm
-
-def render_parameter_controls():
-    """Render parameter controls"""
-    test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05, key="test_size")
-    return test_size
 
 def clear_all_results():
     """Clear all results from session state"""
