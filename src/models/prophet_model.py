@@ -2,12 +2,15 @@
 Prophet Model Implementation
 """
 
+import logging
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from prophet import Prophet
 import warnings
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
 
 class ProphetModel:
     """Prophet model for time series forecasting"""
