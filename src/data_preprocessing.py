@@ -2,11 +2,14 @@
 Data Preprocessing Module
 """
 
+import logging
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+logger = logging.getLogger(__name__)
 
 class DataPreprocessor:
     """Data preprocessing class for time series forecasting"""
