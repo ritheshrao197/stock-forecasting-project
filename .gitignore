@@ -233,7 +233,7 @@ reports/
 *.gif
 *.svg
 *.pdf
-*.html
+# *.html
 *.txt
 *.log
 
@@ -306,7 +306,7 @@ secrets/
 credentials/
 *.secret
 config/secrets.json
-
+*.docx
 # ============================================
 # Temporary Files
 # ============================================

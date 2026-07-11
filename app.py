@@ -614,11 +614,11 @@ if 'progress' not in st.session_state:
     st.session_state.progress = 0
 if 'trigger_forecast' not in st.session_state:
     st.session_state.trigger_forecast = False
-# FIX: persistent, session-backed date range (preset buttons write here)
-if 'start_date' not in st.session_state:
-    st.session_state.start_date = datetime(2021, 1, 1)
-if 'end_date' not in st.session_state:
-    st.session_state.end_date = datetime.now()
+# Initialize widget-owned date state (widgets own their own state)
+if 'start_date_input' not in st.session_state:
+    st.session_state.start_date_input = datetime(2021, 1, 1).date()
+if 'end_date_input' not in st.session_state:
+    st.session_state.end_date_input = datetime.now().date()
 if 'last_report' not in st.session_state:
     st.session_state.last_report = None
 
@@ -704,16 +704,16 @@ with st.sidebar:
     for col, (label, days) in zip(cols, presets):
         with col:
             if st.button(label, use_container_width=True, key=f"preset_{label}"):
-                st.session_state.start_date = datetime.now() - timedelta(days=days)
-                st.session_state.end_date = datetime.now()
+                # Update widget-owned date state directly
+                st.session_state.start_date_input = (datetime.now() - timedelta(days=days)).date()
+                st.session_state.end_date_input = datetime.now().date()
 
     col1, col2 = st.columns(2)
+    # Date range - widgets own their own state
     with col1:
-        start_date = st.date_input("Start", value=st.session_state.start_date, key="start_date_input")
-        st.session_state.start_date = start_date
+        start_date = st.date_input("Start", key="start_date_input")
     with col2:
-        end_date = st.date_input("End", value=st.session_state.end_date, key="end_date_input")
-        st.session_state.end_date = end_date
+        end_date = st.date_input("End", key="end_date_input")
     
     # Normalize date types to datetime for consistency
     start_date = pd.to_datetime(start_date)
@@ -1533,10 +1533,13 @@ if (
         lstm_epochs=lstm_epochs,
     )
     
-    # Rerun once to refresh UI with updated data
-    # Safe because trigger_forecast is already False, so no infinite loop
+    # Only rerun if forecast completed successfully
+    # This reduces unnecessary reruns
     st.session_state.forecast_running = False
-    st.rerun()
+    st.session_state.trigger_forecast = False  # Ensure no loop
+    
+    if st.session_state.forecast_completed:
+        st.rerun()  # Refresh UI with new data
 
 # ============================================
 # FOOTER
