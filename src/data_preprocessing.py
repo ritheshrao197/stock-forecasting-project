@@ -101,6 +101,25 @@ class DataPreprocessor:
         df = df.rename(columns={'Date': 'ds', self.target_column: 'y'})
         return df[['ds', 'y']]
 
+    def get_data_quality_report(self) -> dict:
+        """Generate a data quality report
+        
+        Returns:
+        --------
+        dict: Data quality metrics
+        """
+        report = {
+            'total_rows': len(self.data),
+            'total_columns': len(self.data.columns),
+            'missing_values': int(self.data.isnull().sum().sum()),
+            'missing_pct': float(self.data.isnull().sum().sum() / (len(self.data) * len(self.data.columns)) * 100),
+            'duplicate_rows': int(self.data.duplicated().sum()),
+            'date_range': f"{self.data.index[0]} to {self.data.index[-1]}",
+            'numeric_columns': len(self.data.select_dtypes(include=[np.number]).columns)
+        }
+        logger.info(f"Data quality report generated: {report['total_rows']} rows")
+        return report
+
 
 if __name__ == "__main__":
     # Test the preprocessor
