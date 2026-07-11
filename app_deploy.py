@@ -1,7 +1,32 @@
 """
-Stock Market Price Forecasting - Single File Version for Streamlit Cloud
-With Rate Limiting Protection
+Stock Market Price Forecasting - Interactive Web UI
+Unified Version - Supports Both Indian & International Stocks
 """
+
+# ============================================
+# SUPPRESS UNWANTED LOGS AND WARNINGS
+# ============================================
+
+import os
+import sys
+import warnings
+
+# Suppress TensorFlow logs (set before importing tensorflow)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0=all, 1=warning, 2=error, 3=none
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Disable oneDNN optimization message
+
+# Suppress general warnings
+warnings.filterwarnings('ignore')
+
+# Suppress other logging
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+# ============================================
+# IMPORTS
+# ============================================
 
 import streamlit as st
 import pandas as pd
@@ -14,16 +39,14 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import time
 import random
-import warnings
-warnings.filterwarnings('ignore')
 
 # ============================================
 # PAGE CONFIGURATION
 # ============================================
 
 st.set_page_config(
-    page_title="Stock Market Forecasting - Indian Stocks",
-    page_icon="🇮🇳",
+    page_title="Stock Market Forecasting",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -40,6 +63,113 @@ st.markdown("""
         text-align: center;
         margin-bottom: 0.5rem;
     }
+    
+    /* Status Box Styles */
+    .status-box {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin: 0.5rem 0;
+        font-size: 0.95rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-left: 4px solid #9e9e9e;
+        background-color: #f5f5f5;
+        color: #333;
+    }
+    .status-box .status-icon {
+        font-size: 1.3rem;
+    }
+    .status-box.status-idle {
+        border-left-color: #9e9e9e;
+        background-color: #f5f5f5;
+        color: #555;
+    }
+    .status-box.status-processing {
+        border-left-color: #ff6b35;
+        background-color: #fff3e0;
+        color: #e65100;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-box.status-complete {
+        border-left-color: #4caf50;
+        background-color: #e8f5e9;
+        color: #1b5e20;
+    }
+    .status-box.status-error {
+        border-left-color: #f44336;
+        background-color: #ffebee;
+        color: #b71c1c;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+    
+    /* Loading spinner animation */
+    .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 107, 53, 0.3);
+        border-radius: 50%;
+        border-top-color: #ff6b35;
+        animation: spin 0.8s ease-in-out infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Processing dots animation */
+    .processing-dots::after {
+        content: '';
+        animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+        0% { content: ''; }
+        25% { content: '.'; }
+        50% { content: '..'; }
+        75% { content: '...'; }
+        100% { content: ''; }
+    }
+    
+    /* Progress bar styling */
+    .progress-container {
+        width: 100%;
+        background-color: #f0f0f0;
+        border-radius: 10px;
+        margin: 0.5rem 0;
+        overflow: hidden;
+        height: 24px;
+        position: relative;
+    }
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #ff6b35, #f7931e);
+        border-radius: 10px;
+        transition: width 0.5s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: bold;
+        width: 0%;
+    }
+    .progress-text {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        color: #333;
+        font-size: 0.75rem;
+        font-weight: bold;
+        line-height: 24px;
+    }
+    
+    /* Metric card */
     .metric-card {
         background-color: #f8f9fa;
         padding: 1rem;
@@ -57,6 +187,11 @@ st.markdown("""
         background-color: #145a8a;
         color: white;
     }
+    .stButton button:disabled {
+        background-color: #ccc;
+        color: #666;
+    }
+    
     .india-badge {
         background-color: #ff6b35;
         color: white;
@@ -67,6 +202,17 @@ st.markdown("""
         display: inline-block;
         margin-left: 8px;
     }
+    .us-badge {
+        background-color: #1f77b4;
+        color: white;
+        padding: 2px 12px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        display: inline-block;
+        margin-left: 8px;
+    }
+    
     section[data-testid="stSidebar"] {
         height: 100vh !important;
         overflow-y: auto !important;
@@ -136,7 +282,7 @@ st.markdown("""
         border-radius: 8px;
         font-family: 'Consolas', 'Courier New', monospace;
         font-size: 0.85rem;
-        height: 350px;
+        height: 250px;
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -184,15 +330,16 @@ try:
     import tensorflow as tf
     from tensorflow.keras.models import Sequential
     from tensorflow.keras.layers import LSTM, Dense, Dropout
+    from tensorflow.keras.callbacks import EarlyStopping
     LSTM_AVAILABLE = True
 except:
     LSTM_AVAILABLE = False
 
 # ============================================
-# TICKER DATABASE - INDIAN STOCKS
+# TICKER DATABASE - UNIFIED
 # ============================================
 
-TICKER_CATEGORIES = {
+INDIAN_TICKERS = {
     "📊 Indian Indices": {
         "^NSEI": "NIFTY 50",
         "^BSESN": "SENSEX",
@@ -281,26 +428,91 @@ TICKER_CATEGORIES = {
         "NCC.NS": "NCC Ltd",
         "DLF.NS": "DLF Ltd",
         "GODREJCP.NS": "Godrej Consumer"
+    }
+}
+
+INTERNATIONAL_TICKERS = {
+    "📊 US Indices": {
+        "^GSPC": "S&P 500",
+        "^DJI": "Dow Jones Industrial Average",
+        "^IXIC": "NASDAQ Composite",
+        "^RUT": "Russell 2000",
+        "^VIX": "CBOE Volatility Index"
     },
-    "🌍 International Stocks": {
+    "🏢 US Tech Companies": {
         "AAPL": "Apple Inc.",
         "MSFT": "Microsoft Corporation",
         "GOOGL": "Alphabet Inc.",
         "AMZN": "Amazon.com Inc.",
+        "NVDA": "NVIDIA Corporation",
+        "META": "Meta Platforms Inc.",
         "TSLA": "Tesla Inc.",
-        "NVDA": "NVIDIA Corporation"
+        "NFLX": "Netflix Inc.",
+        "INTC": "Intel Corporation",
+        "AMD": "Advanced Micro Devices"
+    },
+    "🏦 US Financial Companies": {
+        "JPM": "JPMorgan Chase & Co.",
+        "BAC": "Bank of America",
+        "WFC": "Wells Fargo & Co.",
+        "C": "Citigroup Inc.",
+        "GS": "Goldman Sachs Group Inc.",
+        "MS": "Morgan Stanley",
+        "V": "Visa Inc.",
+        "MA": "Mastercard Inc."
+    },
+    "🛒 US Retail & Consumer": {
+        "WMT": "Walmart Inc.",
+        "TGT": "Target Corporation",
+        "COST": "Costco Wholesale",
+        "HD": "Home Depot Inc.",
+        "MCD": "McDonald's Corporation",
+        "NKE": "Nike Inc.",
+        "SBUX": "Starbucks Corporation"
+    },
+    "💊 US Healthcare": {
+        "JNJ": "Johnson & Johnson",
+        "PFE": "Pfizer Inc.",
+        "UNH": "UnitedHealth Group",
+        "MRK": "Merck & Co.",
+        "ABBV": "AbbVie Inc.",
+        "LLY": "Eli Lilly and Company"
+    },
+    "⛽ US Energy": {
+        "XOM": "Exxon Mobil Corporation",
+        "CVX": "Chevron Corporation",
+        "COP": "ConocoPhillips",
+        "EOG": "EOG Resources Inc.",
+        "SLB": "Schlumberger Limited"
+    },
+    "📈 ETFs & Funds": {
+        "SPY": "SPDR S&P 500 ETF",
+        "QQQ": "Invesco QQQ Trust",
+        "VTI": "Vanguard Total Stock Market",
+        "VOO": "Vanguard S&P 500 ETF",
+        "BND": "Vanguard Total Bond Market",
+        "GLD": "SPDR Gold Trust"
     }
 }
 
-def get_ticker_options():
+def get_ticker_options(market_type="India"):
+    """Get ticker options based on market type"""
     options = []
-    for category, tickers in TICKER_CATEGORIES.items():
+    
+    if market_type == "India":
+        categories = INDIAN_TICKERS
+    else:
+        categories = INTERNATIONAL_TICKERS
+    
+    for category, tickers in categories.items():
         for ticker, name in tickers.items():
             options.append({
                 "label": f"{name} ({ticker})",
                 "value": ticker,
-                "category": category
+                "category": category,
+                "market": market_type
             })
+    
     return sorted(options, key=lambda x: x["label"])
 
 def get_exchange_info(ticker):
@@ -314,6 +526,82 @@ def get_exchange_info(ticker):
     else:
         return "🌍 International Stock"
 
+def get_currency_symbol(ticker):
+    """Get currency symbol based on ticker"""
+    if ticker.endswith('.NS') or ticker.endswith('.BO') or ticker.startswith('^NSE') or ticker.startswith('^BSESN'):
+        return "₹"
+    else:
+        return "$"
+
+# ============================================
+# STATUS NOTIFICATION FUNCTION WITH PROGRESS
+# ============================================
+
+def render_status_notification():
+    """Render animated status notification with progress"""
+    
+    if st.session_state.forecast_running:
+        # Get current process name
+        process_name = st.session_state.get('current_process', 'Training models')
+        progress = st.session_state.get('progress', 0)
+        
+        # Processing status with spinner animation and progress bar
+        st.markdown(f"""
+        <div class="status-box status-processing">
+            <span class="status-icon">⏳</span>
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>
+                        <strong>Processing</strong> 
+                        <span class="processing-dots">{process_name}</span>
+                    </span>
+                    <span style="display: inline-block; margin-left: 10px;">
+                        <span class="spinner"></span>
+                    </span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: {progress}%;">
+                        {int(progress)}%
+                    </div>
+                    <div class="progress-text">{int(progress)}%</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    elif st.session_state.models_trained and st.session_state.forecast_completed:
+        st.markdown("""
+        <div class="status-box status-complete">
+            <span class="status-icon">✅</span>
+            <span>
+                <strong>Forecast Complete!</strong> 
+                Results are ready to view.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    elif st.session_state.get('forecast_error', False):
+        st.markdown("""
+        <div class="status-box status-error">
+            <span class="status-icon">❌</span>
+            <span>
+                <strong>Forecast Failed</strong> 
+                Please check the logs for details.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    else:
+        st.markdown("""
+        <div class="status-box status-idle">
+            <span class="status-icon">💡</span>
+            <span>
+                <strong>Ready</strong> 
+                Configure settings and click 'Run Forecast' to start analysis.
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
 # ============================================
 # CACHING FOR RATE LIMITING
 # ============================================
@@ -322,7 +610,6 @@ def get_exchange_info(ticker):
 def fetch_stock_data_with_cache(ticker, start_date, end_date):
     """Fetch stock data with caching to prevent rate limiting"""
     try:
-        # Add a small random delay to prevent hitting rate limits
         time.sleep(random.uniform(0.5, 1.5))
         
         stock = yf.Ticker(ticker)
@@ -334,7 +621,6 @@ def fetch_stock_data_with_cache(ticker, start_date, end_date):
         )
         
         if data.empty:
-            # Try without auto_adjust
             time.sleep(random.uniform(0.5, 1.0))
             data = stock.history(
                 start=start_date,
@@ -345,7 +631,6 @@ def fetch_stock_data_with_cache(ticker, start_date, end_date):
         
         return data
     except Exception as e:
-        # If rate limited, wait longer and retry
         if "Too Many Requests" in str(e) or "Rate limited" in str(e):
             time.sleep(random.uniform(5, 10))
             stock = yf.Ticker(ticker)
@@ -372,30 +657,74 @@ if 'models_trained' not in st.session_state:
     st.session_state.models_trained = False
 if 'forecast_running' not in st.session_state:
     st.session_state.forecast_running = False
+if 'forecast_completed' not in st.session_state:
+    st.session_state.forecast_completed = False
+if 'forecast_error' not in st.session_state:
+    st.session_state.forecast_error = False
 if 'logs' not in st.session_state:
     st.session_state.logs = []
 if 'rate_limit_retry_count' not in st.session_state:
     st.session_state.rate_limit_retry_count = 0
+if 'market_type' not in st.session_state:
+    st.session_state.market_type = "India"
+if 'current_process' not in st.session_state:
+    st.session_state.current_process = "Initializing..."
+if 'progress' not in st.session_state:
+    st.session_state.progress = 0
 
 # ============================================
 # SIDEBAR
 # ============================================
 
 with st.sidebar:
+    # Header
     st.markdown("""
     <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 0.5rem;">
         <span style="font-size: 2rem;">📈</span>
         <span style="font-size: 1.1rem; font-weight: bold;">Configuration</span>
-        <span class="india-badge">🇮🇳 INDIA</span>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Market Selection Toggle
+    st.subheader("🌍 Market Selection")
+    
+    market_col1, market_col2 = st.columns(2)
+    with market_col1:
+        if st.button("🇮🇳 India", use_container_width=True, type="primary" if st.session_state.market_type == "India" else "secondary"):
+            st.session_state.market_type = "India"
+            st.session_state.data = None
+            st.session_state.predictions = {}
+            st.session_state.results = None
+            st.session_state.models_trained = False
+            st.session_state.forecast_completed = False
+            st.session_state.forecast_error = False
+            st.rerun()
+    with market_col2:
+        if st.button("🌍 International", use_container_width=True, type="primary" if st.session_state.market_type == "International" else "secondary"):
+            st.session_state.market_type = "International"
+            st.session_state.data = None
+            st.session_state.predictions = {}
+            st.session_state.results = None
+            st.session_state.models_trained = False
+            st.session_state.forecast_completed = False
+            st.session_state.forecast_error = False
+            st.rerun()
+    
+    # Show current market badge
+    if st.session_state.market_type == "India":
+        st.markdown('<div style="text-align: center;"><span class="india-badge">🇮🇳 INDIAN STOCKS</span></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div style="text-align: center;"><span class="us-badge">🌍 INTERNATIONAL STOCKS</span></div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     # Stock Selection
     st.subheader("📈 Stock Selection")
     
-    search_term = st.text_input("🔍 Search", placeholder="Type to search...", key="ticker_search")
+    # Get ticker options based on market type
+    all_options = get_ticker_options(st.session_state.market_type)
     
-    all_options = get_ticker_options()
+    search_term = st.text_input("🔍 Search", placeholder="Type to search...", key="ticker_search")
     
     if search_term:
         filtered = [o for o in all_options if search_term.lower() in o["label"].lower()]
@@ -404,15 +733,15 @@ with st.sidebar:
     
     if not filtered:
         filtered = all_options
-        st.warning("No matching tickers found")
     
     ticker_options = [o["label"] for o in filtered]
     ticker_values = [o["value"] for o in filtered]
     
-    # Default to Reliance
+    # Set default based on market type
+    default_ticker = "RELIANCE.NS" if st.session_state.market_type == "India" else "AAPL"
     default_index = 0
     for i, opt in enumerate(filtered):
-        if opt["value"] == "RELIANCE.NS":
+        if opt["value"] == default_ticker:
             default_index = i
             break
     
@@ -424,22 +753,16 @@ with st.sidebar:
     )
     
     selected_index = ticker_options.index(selected_label) if selected_label in ticker_options else 0
-    ticker = ticker_values[selected_index] if ticker_values else "RELIANCE.NS"
+    ticker = ticker_values[selected_index] if ticker_values else default_ticker
     
-    # Show category and exchange info
+    # Show category
     for opt in all_options:
         if opt["value"] == ticker:
             st.caption(f"📌 {opt['category']}")
             break
     
-    st.caption(f"🏛️ {get_exchange_info(ticker)}")
-    
-    with st.expander("➕ Custom Ticker"):
-        st.caption("Use .NS for NSE, .BO for BSE")
-        custom_ticker = st.text_input("Ticker", placeholder="e.g., TATAMOTORS.NS", key="custom_ticker")
-        if custom_ticker:
-            ticker = custom_ticker
-            st.caption(f"Using: {ticker}")
+    exchange_info = get_exchange_info(ticker)
+    st.caption(f"🏛️ {exchange_info}")
     
     # Date Range
     st.subheader("📅 Date Range")
@@ -479,8 +802,13 @@ with st.sidebar:
     test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05, key="test_size")
     
     with st.expander("🧠 LSTM Parameters"):
-        lookback = st.number_input("Lookback", min_value=10, max_value=120, value=60, key="lookback")
-        lstm_epochs = st.number_input("Epochs", min_value=5, max_value=100, value=20, key="lstm_epochs")
+        lookback = st.number_input("Lookback", min_value=10, max_value=120, value=30, key="lookback")  # Reduced default
+        lstm_epochs = st.number_input("Epochs", min_value=5, max_value=50, value=10, key="lstm_epochs")  # Reduced default
+    
+    # Fast Mode Option
+    st.subheader("⚡ Performance")
+    fast_mode = st.checkbox("Fast Mode (faster ARIMA)", value=True, key="fast_mode")
+    st.caption("Uses fixed ARIMA(2,1,2) parameters for speed")
     
     # Rate limit warning
     if st.session_state.rate_limit_retry_count > 2:
@@ -498,7 +826,9 @@ with st.sidebar:
 # MAIN CONTENT
 # ============================================
 
-st.markdown('<h1 class="main-header">🇮🇳 Indian Stock Market Price Forecasting</h1>', unsafe_allow_html=True)
+# Dynamic header based on market type
+header_text = "🇮🇳 Indian Stock Market Price Forecasting" if st.session_state.market_type == "India" else "🌍 International Stock Market Price Forecasting"
+st.markdown(f'<h1 class="main-header">{header_text}</h1>', unsafe_allow_html=True)
 st.markdown("*Interactive dashboard for ARIMA, Prophet, and LSTM models*")
 
 # Tabs
@@ -516,8 +846,11 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ============================================
 
 with tab1:
+    render_status_notification()
+    
     if st.session_state.data is not None:
         data = st.session_state.data
+        currency = get_currency_symbol(ticker)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -527,7 +860,7 @@ with tab1:
         with col3:
             st.metric("End Date", data.index[-1].strftime("%Y-%m-%d"))
         with col4:
-            st.metric("Price Range", f"₹{data['Close'].min():.2f} - ₹{data['Close'].max():.2f}")
+            st.metric("Price Range", f"{currency}{data['Close'].min():.2f} - {currency}{data['Close'].max():.2f}")
         
         st.subheader("📊 Price History")
         fig = go.Figure()
@@ -567,8 +900,11 @@ with tab1:
 # ============================================
 
 with tab2:
+    render_status_notification()
+    
     if st.session_state.models_trained and st.session_state.results is not None:
         results = st.session_state.results
+        currency = get_currency_symbol(ticker)
         
         st.subheader("📊 Model Performance Comparison")
         
@@ -582,7 +918,7 @@ with tab2:
             <div class="metric-card">
                 <h4>🏆 Best Model</h4>
                 <p style="font-size: 1.5rem; font-weight: bold;">{best_model['Model']}</p>
-                <p>RMSE: ₹{best_model['RMSE']:.2f}</p>
+                <p>RMSE: {currency}{best_model['RMSE']:.2f}</p>
                 <p>MAPE: {best_model['MAPE']:.2f}%</p>
                 <p>R²: {best_model['R²']:.4f}</p>
             </div>
@@ -593,11 +929,11 @@ with tab2:
             fig, ax = plt.subplots(figsize=(8, 5))
             bars = ax.bar(results['Model'], results['RMSE'], color=['#1f77b4', '#ff7f0e', '#2ca02c'])
             ax.set_title('RMSE Comparison')
-            ax.set_ylabel('RMSE (₹)')
+            ax.set_ylabel(f'RMSE ({currency})')
             ax.grid(True, alpha=0.3)
             for bar, value in zip(bars, results['RMSE']):
                 ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                       f'₹{value:.2f}', ha='center', va='bottom', fontsize=10)
+                       f'{currency}{value:.2f}', ha='center', va='bottom', fontsize=10)
             st.pyplot(fig)
         
         with col2:
@@ -611,17 +947,21 @@ with tab2:
                        f'{value:.2f}%', ha='center', va='bottom', fontsize=10)
             st.pyplot(fig)
     else:
-        st.info("👈 Run the forecast to see model results.")
+        if not st.session_state.forecast_running:
+            st.info("👈 Run the forecast to see model results.")
 
 # ============================================
 # TAB 3: Predictions
 # ============================================
 
 with tab3:
+    render_status_notification()
+    
     if st.session_state.models_trained and st.session_state.predictions:
         data = st.session_state.data
         train_size = int(len(data) * (1 - test_size))
         test_data = data['Close'][train_size:]
+        currency = get_currency_symbol(ticker)
         
         st.subheader("📈 Predictions vs Actual")
         
@@ -651,7 +991,13 @@ with tab3:
                     line=dict(color=colors[i % len(colors)], width=2, dash='dash')
                 ))
         
-        fig.update_layout(height=500, hovermode='x unified')
+        fig.update_layout(
+            title=f'Stock Price Forecast - {ticker}',
+            xaxis_title='Date',
+            yaxis_title=f'Price ({currency})',
+            hovermode='x unified',
+            height=500
+        )
         st.plotly_chart(fig, use_container_width=True)
         
         st.subheader("🔍 Zoomed View")
@@ -676,16 +1022,25 @@ with tab3:
                     line=dict(color=colors[i % len(colors)], width=2)
                 ))
         
-        fig2.update_layout(height=400, hovermode='x unified')
+        fig2.update_layout(
+            title=f'Zoomed View (Last {zoom} Days)',
+            xaxis_title='Date',
+            yaxis_title=f'Price ({currency})',
+            hovermode='x unified',
+            height=400
+        )
         st.plotly_chart(fig2, use_container_width=True)
     else:
-        st.info("👈 Run the forecast to see predictions.")
+        if not st.session_state.forecast_running:
+            st.info("👈 Run the forecast to see predictions.")
 
 # ============================================
 # TAB 4: Model Comparison
 # ============================================
 
 with tab4:
+    render_status_notification()
+    
     if st.session_state.models_trained and st.session_state.results is not None:
         results = st.session_state.results
         st.subheader("📋 Detailed Model Comparison")
@@ -693,15 +1048,17 @@ with tab4:
         
         st.subheader("💡 Recommendations")
         best_rmse = results.loc[results['RMSE'].idxmin()]
+        currency = get_currency_symbol(ticker)
         st.info(f"""
         **📌 Best Model**
         - Model: **{best_rmse['Model']}**
-        - RMSE: ₹{best_rmse['RMSE']:.2f}
+        - RMSE: {currency}{best_rmse['RMSE']:.2f}
         - MAPE: {best_rmse['MAPE']:.2f}%
         - R²: {best_rmse['R²']:.4f}
         """)
     else:
-        st.info("👈 Run the forecast to see model comparison.")
+        if not st.session_state.forecast_running:
+            st.info("👈 Run the forecast to see model comparison.")
 
 # ============================================
 # TAB 5: Live Logs
@@ -749,9 +1106,9 @@ with tab5:
 
 with tab6:
     st.markdown("""
-    ### 🇮🇳 Indian Stock Market Price Forecasting
+    ### 📈 Stock Market Price Forecasting
     
-    This interactive dashboard compares three forecasting models for Indian stocks:
+    This interactive dashboard compares three forecasting models for both **Indian and International stocks**:
     
     #### 🤖 Models Implemented
     
@@ -759,19 +1116,26 @@ with tab6:
     2. **Prophet** - Facebook's model for seasonal data
     3. **LSTM** - Deep learning model for complex patterns
     
-    #### 🇮🇳 Supported Stocks
+    #### 🌍 Supported Markets
     
+    **🇮🇳 Indian Stocks:**
     - NIFTY 50, SENSEX, and other indices
     - 100+ Indian companies across sectors
     - NSE (.NS) and BSE (.BO) support
     
+    **🌍 International Stocks:**
+    - S&P 500, NASDAQ, Dow Jones
+    - US Tech, Financial, Healthcare, Retail companies
+    - ETFs and Funds
+    
     #### 📝 How to Use
     
-    1. Search and select a ticker
-    2. Choose date range
-    3. Select models
-    4. Click "Run Forecast"
-    5. Explore results in tabs!
+    1. Select market type: 🇮🇳 India or 🌍 International
+    2. Search and select a ticker
+    3. Choose date range
+    4. Select models
+    5. Click "Run Forecast"
+    6. Explore results in tabs!
     """)
 
 # ============================================
@@ -786,17 +1150,33 @@ def add_log(message, log_type="info"):
         "type": log_type
     })
 
+def update_progress(process_name, progress):
+    """Update the current process and progress"""
+    st.session_state.current_process = process_name
+    st.session_state.progress = progress
+    add_log(f"{process_name} - {int(progress)}% complete", "info")
+
 def run_forecast():
-    """Execute the forecast with rate limiting"""
+    """Execute the forecast with rate limiting and progress tracking"""
     st.session_state.forecast_running = True
+    st.session_state.forecast_completed = False
+    st.session_state.forecast_error = False
     st.session_state.logs = []
+    st.session_state.progress = 0
+    st.session_state.current_process = "Initializing..."
     
-    add_log("🚀 Starting forecast...", "header")
+    market_name = "Indian" if st.session_state.market_type == "India" else "International"
+    add_log(f"🚀 Starting {market_name} forecast...", "header")
     add_log(f"📊 Ticker: {ticker}")
+    update_progress("Initializing", 0)
+    
+    start_time = time.time()
+    max_time = 300  # 5 minutes max
     
     try:
         # Load data with caching
         add_log("📊 Loading stock data...", "info")
+        update_progress("Loading stock data", 5)
         
         data = fetch_stock_data_with_cache(
             ticker,
@@ -808,15 +1188,20 @@ def run_forecast():
             add_log("❌ No data found", "error")
             st.error(f"No data found for {ticker}")
             st.session_state.forecast_running = False
+            st.session_state.forecast_error = True
             return
         
         # Add indicators
+        add_log("📊 Adding technical indicators...", "info")
+        update_progress("Adding technical indicators", 10)
+        
         data['SMA_20'] = data['Close'].rolling(20).mean()
         data['SMA_50'] = data['Close'].rolling(50).mean()
         data = data.dropna()
         
         st.session_state.data = data
         add_log(f"✅ Data loaded: {len(data)} rows", "success")
+        update_progress("Data preparation complete", 15)
         
         # Split data
         train_size = int(len(data) * (1 - test_size))
@@ -824,17 +1209,52 @@ def run_forecast():
         test = data['Close'][train_size:]
         
         add_log(f"📊 Train: {len(train)} days, Test: {len(test)} days", "info")
+        update_progress("Data split complete", 20)
         
         st.session_state.predictions = {}
         results = []
         
-        # ARIMA
+        # Total steps for progress
+        total_steps = sum([use_arima, use_prophet, use_lstm])
+        if total_steps == 0:
+            total_steps = 1
+        current_step = 0
+        
+        # ============================================
+        # ARIMA (FIXED - Removed 'disp' parameter)
+        # ============================================
         if use_arima and ARIMA_AVAILABLE:
+            current_step += 1
+            progress_val = 20 + (current_step / total_steps * 60)
             add_log("🤖 Training ARIMA...", "header")
+            update_progress("Training ARIMA model", progress_val)
             try:
-                auto_model = auto_arima(train, seasonal=False, stepwise=True, trace=False)
-                arima_model = ARIMA(train, order=auto_model.order)
-                arima_fitted = arima_model.fit()
+                if fast_mode:
+                    # Fast mode: fixed parameters
+                    add_log("⚡ Fast mode - using default ARIMA(2,1,2)", "info")
+                    p, d, q = 2, 1, 2
+                    arima_model = ARIMA(train, order=(p, d, q))
+                    arima_fitted = arima_model.fit(method_kwargs={'maxiter': 50})  # Removed disp parameter
+                else:
+                    # Regular mode: auto_arima with limits
+                    auto_model = auto_arima(
+                        train,
+                        start_p=0, max_p=3,
+                        start_q=0, max_q=3,
+                        max_d=2,
+                        seasonal=False,
+                        stepwise=True,
+                        trace=False,
+                        error_action='ignore',
+                        suppress_warnings=True,
+                        n_fits=10,
+                        information_criterion='aic',
+                        n_jobs=1,
+                        method='lbfgs'
+                    )
+                    arima_model = ARIMA(train, order=auto_model.order)
+                    arima_fitted = arima_model.fit(method_kwargs={'maxiter': 100})  # Removed disp parameter
+                
                 arima_pred = arima_fitted.forecast(steps=len(test))
                 st.session_state.predictions['ARIMA'] = arima_pred.values if hasattr(arima_pred, 'values') else arima_pred
                 
@@ -843,24 +1263,53 @@ def run_forecast():
                 mape = np.mean(np.abs((test.values - arima_pred[:len(test)]) / test.values)) * 100
                 ss_res = np.sum((test.values - arima_pred[:len(test)])**2)
                 ss_tot = np.sum((test.values - np.mean(test.values))**2)
-                r2 = 1 - (ss_res / ss_tot)
+                r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
                 results.append({'Model': 'ARIMA', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
-                add_log(f"✅ ARIMA complete! RMSE: ₹{rmse:.2f}", "success")
+                add_log(f"✅ ARIMA complete! RMSE: {get_currency_symbol(ticker)}{rmse:.2f}", "success")
+                update_progress("ARIMA training complete", min(progress_val + 10, 80))
             except Exception as e:
                 add_log(f"❌ ARIMA failed: {str(e)[:100]}", "error")
         
-        # Prophet
+        # ============================================
+        # PROPHET (Fixed Timezone)
+        # ============================================
         if use_prophet and PROPHET_AVAILABLE:
+            current_step += 1
+            progress_val = 20 + (current_step / total_steps * 60)
             add_log("🤖 Training Prophet...", "header")
+            update_progress("Training Prophet model", progress_val)
             try:
+                # Set environment for Prophet
+                os.environ['STAN_BACKEND'] = 'CMDSTANPY'
+                
                 prophet_data = data.reset_index()[['Date', 'Close']]
                 prophet_data.columns = ['ds', 'y']
+                
+                # FIX: Remove timezone
+                if pd.api.types.is_datetime64_any_dtype(prophet_data['ds']):
+                    prophet_data['ds'] = pd.to_datetime(prophet_data['ds']).dt.tz_localize(None)
+                
                 train_prophet = prophet_data[:train_size]
-                prophet_model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
-                prophet_model.fit(train_prophet)
+                train_prophet['y'] = train_prophet['y'].astype(float)
+                
+                prophet_model = Prophet(
+                    yearly_seasonality=True,
+                    weekly_seasonality=True,
+                    daily_seasonality=False,
+                    seasonality_mode='additive',
+                    changepoint_prior_scale=0.05,
+                    seasonality_prior_scale=10.0,
+                    holidays_prior_scale=10.0
+                )
+                
+                # Fit with quiet mode
+                prophet_model.fit(train_prophet, quiet=True)
+                
                 future = prophet_model.make_future_dataframe(periods=len(test))
                 forecast = prophet_model.predict(future)
                 prophet_pred = forecast['yhat'].values[-len(test):]
+                prophet_pred = np.nan_to_num(prophet_pred, nan=test.mean())
+                
                 st.session_state.predictions['Prophet'] = prophet_pred
                 
                 rmse = np.sqrt(np.mean((test.values - prophet_pred)**2))
@@ -868,39 +1317,77 @@ def run_forecast():
                 mape = np.mean(np.abs((test.values - prophet_pred) / test.values)) * 100
                 ss_res = np.sum((test.values - prophet_pred)**2)
                 ss_tot = np.sum((test.values - np.mean(test.values))**2)
-                r2 = 1 - (ss_res / ss_tot)
+                r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
                 results.append({'Model': 'Prophet', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
-                add_log(f"✅ Prophet complete! RMSE: ₹{rmse:.2f}", "success")
+                add_log(f"✅ Prophet complete! RMSE: {get_currency_symbol(ticker)}{rmse:.2f}", "success")
+                update_progress("Prophet training complete", min(progress_val + 10, 80))
             except Exception as e:
                 add_log(f"❌ Prophet failed: {str(e)[:100]}", "error")
         
-        # LSTM
+        # ============================================
+        # LSTM (Fixed - Won't Get Stuck)
+        # ============================================
         if use_lstm and LSTM_AVAILABLE:
+            current_step += 1
+            progress_val = 20 + (current_step / total_steps * 60)
             add_log("🤖 Training LSTM...", "header")
+            update_progress("Training LSTM model", progress_val)
             try:
+                actual_lookback = min(lookback, 30)  # Reduced max
+                actual_epochs = min(lstm_epochs, 10)  # Reduced max
+                
+                add_log(f"📊 Using lookback: {actual_lookback}, epochs: {actual_epochs}", "info")
+                
                 scaler = MinMaxScaler()
                 scaled_data = scaler.fit_transform(data[['Close']])
                 
                 X, y = [], []
-                for i in range(lookback, len(scaled_data)):
-                    X.append(scaled_data[i-lookback:i])
+                for i in range(actual_lookback, len(scaled_data)):
+                    X.append(scaled_data[i-actual_lookback:i])
                     y.append(scaled_data[i, 0])
+                
                 X = np.array(X)
                 y = np.array(y)
+                
+                if len(X) == 0:
+                    add_log("❌ Not enough data for LSTM", "error")
+                    raise ValueError("Not enough data")
                 
                 split_idx = int(len(X) * (1 - test_size))
                 X_train, X_test = X[:split_idx], X[split_idx:]
                 y_train, y_test = y[:split_idx], y[split_idx:]
                 
+                # Simpler model
                 model = Sequential([
-                    LSTM(50, return_sequences=True, input_shape=(lookback, 1)),
+                    LSTM(32, return_sequences=True, input_shape=(actual_lookback, 1)),
                     Dropout(0.2),
-                    LSTM(50, return_sequences=False),
+                    LSTM(16, return_sequences=False),
                     Dropout(0.2),
                     Dense(1)
                 ])
                 model.compile(optimizer='adam', loss='mse')
-                model.fit(X_train, y_train, epochs=lstm_epochs, batch_size=32, verbose=0)
+                
+                early_stop = EarlyStopping(monitor='loss', patience=2, restore_best_weights=True)
+                
+                for epoch in range(actual_epochs):
+                    # Check timeout
+                    if time.time() - start_time > max_time:
+                        add_log("⏰ Timeout - stopping LSTM training", "warning")
+                        break
+                    
+                    history = model.fit(
+                        X_train, y_train, 
+                        epochs=1, 
+                        batch_size=32, 
+                        verbose=0,
+                        callbacks=[early_stop]
+                    )
+                    epoch_progress = progress_val + ((epoch + 1) / actual_epochs * 30)
+                    update_progress(f"Training LSTM - Epoch {epoch+1}/{actual_epochs}", min(epoch_progress, 85))
+                    
+                    if len(history.history['loss']) > 0 and history.history['loss'][0] < 0.001:
+                        add_log(f"✅ Early stopping at epoch {epoch+1}", "success")
+                        break
                 
                 lstm_pred_scaled = model.predict(X_test, verbose=0)
                 lstm_pred = scaler.inverse_transform(
@@ -916,21 +1403,28 @@ def run_forecast():
                 mape = np.mean(np.abs((test.values - lstm_pred[:len(test)]) / test.values)) * 100
                 ss_res = np.sum((test.values - lstm_pred[:len(test)])**2)
                 ss_tot = np.sum((test.values - np.mean(test.values))**2)
-                r2 = 1 - (ss_res / ss_tot)
+                r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
                 results.append({'Model': 'LSTM', 'RMSE': rmse, 'MAE': mae, 'MAPE': mape, 'R²': r2})
-                add_log(f"✅ LSTM complete! RMSE: ₹{rmse:.2f}", "success")
+                add_log(f"✅ LSTM complete! RMSE: {get_currency_symbol(ticker)}{rmse:.2f}", "success")
+                update_progress("LSTM training complete", 90)
             except Exception as e:
                 add_log(f"❌ LSTM failed: {str(e)[:100]}", "error")
         
+        # ============================================
         # Complete
+        # ============================================
+        update_progress("Finalizing results", 95)
+        
         st.session_state.results = pd.DataFrame(results)
         st.session_state.models_trained = True
+        st.session_state.forecast_completed = True
         
         add_log(f"✅ Forecast complete! {len(results)} models trained.", "success")
+        update_progress("Forecast complete!", 100)
         
         if len(results) > 0:
             best = st.session_state.results.loc[st.session_state.results['RMSE'].idxmin()]
-            add_log(f"🏆 Best: {best['Model']} (RMSE: ₹{best['RMSE']:.2f})", "success")
+            add_log(f"🏆 Best: {best['Model']} (RMSE: {get_currency_symbol(ticker)}{best['RMSE']:.2f})", "success")
             st.success(f"✅ Forecast complete! Best: **{best['Model']}**")
             st.balloons()
         
@@ -943,6 +1437,8 @@ def run_forecast():
         else:
             add_log(f"❌ Error: {error_msg}", "error")
             st.error(f"Error: {error_msg}")
+        st.session_state.forecast_error = True
+        update_progress("Error occurred", 0)
     
     st.session_state.forecast_running = False
 
@@ -961,6 +1457,6 @@ if run_button and not st.session_state.forecast_running:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; font-size: 0.8rem;">
-    Built with ❤️ using Streamlit | 🇮🇳 Indian Stock Market Price Forecasting
+    Built with ❤️ using Streamlit | 🇮🇳 Indian & 🌍 International Stock Market Price Forecasting
 </div>
 """, unsafe_allow_html=True)
