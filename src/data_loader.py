@@ -3,11 +3,14 @@ Data Acquisition Module
 Fetches stock data from Yahoo Finance
 """
 
+import logging
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
+
+logger = logging.getLogger(__name__)
 
 class StockDataLoader:
     """A comprehensive data loader for stock market data"""
