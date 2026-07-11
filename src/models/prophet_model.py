@@ -135,10 +135,16 @@ class ProphetModel:
         mae = mean_absolute_error(actual, predicted)
         mape = np.mean(np.abs((actual - predicted) / actual)) * 100
         
+        # Calculate R² score
+        ss_res = np.sum((actual - predicted) ** 2)
+        ss_tot = np.sum((actual - np.mean(actual)) ** 2)
+        r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+        
         metrics = {
             'RMSE': rmse,
             'MAE': mae,
-            'MAPE': mape
+            'MAPE': mape,
+            'R2': r2
         }
         
         print("\n=== Prophet Model Evaluation ===")
