@@ -1,29 +1,71 @@
-# 📈 Stock Market Price Forecasting
+# Stock Market Price Forecasting
 
-An interactive web application for forecasting stock prices using ARIMA, Prophet, and LSTM models.
+A comprehensive project implementing ARIMA, Prophet, and LSTM models for stock market price forecasting with short-term vs long-term prediction analysis.
 
-## ✨ Features
+## 📋 Features
 
-- 📊 **Real-time Data**: Fetch live stock data from Yahoo Finance
-- 🤖 **Multiple Models**: ARIMA, Prophet, and LSTM
-- 📈 **Interactive Visualizations**: Plotly charts with zoom and hover
-- 📊 **Model Comparison**: RMSE, MAE, MAPE, R² metrics
-- 📝 **Live Logs**: Real-time terminal output during processing
-- 🔍 **Searchable Tickers**: 100+ pre-loaded symbols with search
-- 📱 **Responsive**: Works on desktop and mobile
+- **Data Acquisition**: Automatic data fetching from Yahoo Finance
+- **Data Preprocessing**: Technical indicators, feature engineering, and data splitting
+- **Three Models**: ARIMA, Prophet, and LSTM implementations
+- **Model Comparison**: Comprehensive evaluation with RMSE, MAE, MAPE, R²
+- **Short-term vs Long-term**: Analysis of model performance across different horizons
+- **Visualization**: Interactive and static plots for analysis
+- **Interactive UI**: Streamlit-based dashboard with live logs
 
 ## 🚀 Quick Start
 
-### Installation
-
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/stock-forecasting-project.git
-cd stock-forecasting-project
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Install dependencies
 pip install -r requirements.txt
+
+# Run the Streamlit app
+streamlit run app.py
+
+# Or run the CLI pipeline
+python main.py
+```
+
+## 📊 Models
+
+| Model | Type | Best For |
+|-------|------|----------|
+| ARIMA | Statistical | Short-term, linear trends |
+| Prophet | ML/Seasonal | Business time series |
+| LSTM | Deep Learning | Complex, non-linear patterns |
+
+## 📁 Project Structure
+
+```
+├── app.py              # Streamlit web application
+├── main.py             # CLI pipeline entry point
+├── config/             # Configuration settings
+├── src/                # Source code
+│   ├── data_loader.py
+│   ├── data_preprocessing.py
+│   ├── model_comparison.py
+│   └── models/
+├── UI/                 # UI components
+│   ├── sidebar.py
+│   ├── components.py
+│   └── tabs/
+└── reports/            # Generated reports
+```
+
+## 📈 Usage
+
+1. Select a ticker symbol (or search from 100+ presets)
+2. Choose date range
+3. Select models to run
+4. Adjust parameters
+5. Click "Run Forecast"
+
+## 🛠️ Tech Stack
+
+- Python 3.10+
+- TensorFlow, Prophet, Statsmodels
+- Streamlit, Plotly, Matplotlib
+- pandas, numpy, scikit-learn
+
+## 📝 License
+
+MIT License
