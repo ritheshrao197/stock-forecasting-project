@@ -1,5 +1,5 @@
 """
-Sidebar configuration for the Streamlit app - Full Visible Layout
+Sidebar configuration for the Streamlit app - Ultra Compact
 """
 
 import streamlit as st
@@ -14,9 +14,9 @@ except:
     LSTM_AVAILABLE = False
 
 def render_sidebar():
-    """Render the sidebar with all configuration options - Fully Visible"""
+    """Render the sidebar - Ultra Compact"""
     
-    # Apply custom CSS for better layout
+    # Apply custom CSS for ultra compact layout
     st.markdown("""
     <style>
         /* Make sidebar full height with scroll */
@@ -24,58 +24,102 @@ def render_sidebar():
             height: 100vh !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
+            padding-top: 0 !important;
         }
         
-        /* Ensure sidebar content can scroll */
         section[data-testid="stSidebar"] > div {
             height: 100% !important;
             overflow-y: auto !important;
-            padding-bottom: 2rem !important;
+            padding-top: 0 !important;
+            padding-bottom: 0.5rem !important;
         }
         
-        /* Make the sidebar content container scrollable */
-        .css-1d391kg {
-            height: 100vh !important;
-            overflow-y: auto !important;
+        /* Remove all extra spacing */
+        .block-container {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
         }
         
-        /* Better spacing */
+        /* Minimal subheader spacing */
+        .stSubheader {
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.1rem !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            padding-top: 0 !important;
+        }
+        
+        /* First subheader - no top margin */
+        .stSubheader:first-of-type {
+            margin-top: 0 !important;
+        }
+        
+        /* Remove spacing between elements */
         .stTextInput {
-            margin-bottom: 0.25rem !important;
+            margin-bottom: 0.05rem !important;
+            padding-top: 0 !important;
         }
         
         .stSelectbox {
-            margin-top: 0.25rem !important;
-            margin-bottom: 0.5rem !important;
+            margin-top: 0.05rem !important;
+            margin-bottom: 0.1rem !important;
+            padding-top: 0 !important;
         }
         
-        .stSubheader {
-            margin-top: 0.75rem !important;
-            margin-bottom: 0.25rem !important;
+        .stButton button {
+            padding: 0.2rem 0.5rem !important;
+            font-size: 0.8rem !important;
+            margin: 0 !important;
         }
         
-        /* Category label */
+        .stCheckbox {
+            margin-bottom: 0.05rem !important;
+            padding-top: 0 !important;
+        }
+        
+        .stCheckbox label {
+            font-size: 0.8rem !important;
+        }
+        
+        .stSlider {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        
+        .stDateInput {
+            margin-bottom: 0.05rem !important;
+        }
+        
+        .stDateInput label {
+            font-size: 0.75rem !important;
+        }
+        
+        .stColumns {
+            gap: 0.2rem !important;
+        }
+        
+        /* Compact expander */
+        .streamlit-expanderHeader {
+            font-size: 0.75rem !important;
+            padding: 0.1rem 0 !important;
+        }
+        
+        .streamlit-expanderContent {
+            padding-top: 0.05rem !important;
+            padding-bottom: 0.05rem !important;
+        }
+        
+        /* Category label - ultra small */
         .category-label {
-            font-size: 0.8rem;
+            font-size: 0.65rem;
             color: #888;
-            margin-top: -0.25rem;
-            margin-bottom: 0.5rem;
+            margin-top: -0.15rem;
+            margin-bottom: 0.1rem;
             font-style: italic;
-        }
-        
-        /* Scrollbar styling */
-        section[data-testid="stSidebar"]::-webkit-scrollbar {
-            width: 6px;
-        }
-        section[data-testid="stSidebar"]::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        section[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 3px;
-        }
-        section[data-testid="stSidebar"]::-webkit-scrollbar-thumb:hover {
-            background: #555;
         }
         
         /* Hide footer */
@@ -83,31 +127,50 @@ def render_sidebar():
             display: none !important;
         }
         
-        /* Compact expander */
-        .streamlit-expanderHeader {
-            font-size: 0.85rem !important;
-            padding: 0.3rem 0 !important;
+        /* Divider spacing */
+        hr {
+            margin: 0.2rem 0 !important;
         }
         
-        /* Reduce padding in sidebar */
-        .block-container {
-            padding-top: 0.5rem !important;
-            padding-bottom: 0.5rem !important;
+        /* Remove extra padding from sidebar elements */
+        .st-emotion-cache-1kyxreq {
+            padding-top: 0 !important;
+        }
+        
+        /* Scrollbar styling */
+        section[data-testid="stSidebar"]::-webkit-scrollbar {
+            width: 3px;
+        }
+        section[data-testid="stSidebar"]::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        section[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 2px;
+        }
+        
+        /* Caption styling */
+        .stCaption {
+            font-size: 0.65rem !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Warning/info text */
+        .stAlert {
+            padding: 0.2rem 0.5rem !important;
+            font-size: 0.7rem !important;
+            margin: 0.1rem 0 !important;
         }
     </style>
     """, unsafe_allow_html=True)
     
     with st.sidebar:
-        # Logo/Header - Compact
-        st.markdown('<div style="text-align: center; font-size: 2.5rem; padding-top: 0.25rem;">📈</div>', unsafe_allow_html=True)
-        st.markdown('<h3 style="text-align: center; margin-bottom: 0.75rem; color: #1f77b4;">Configuration</h3>', unsafe_allow_html=True)
-        
         # ============================================
-        # Stock Selection
+        # Stock Selection - Ultra Compact
         # ============================================
         st.subheader("📈 Stock Selection")
         
-        # Search bar
         search_term = st.text_input(
             "🔍 Search Ticker",
             placeholder="Type company name or symbol...",
@@ -115,7 +178,6 @@ def render_sidebar():
             label_visibility="collapsed"
         )
         
-        # Get all ticker options
         all_options = get_ticker_options()
         
         if search_term:
@@ -130,7 +192,6 @@ def render_sidebar():
         
         if not filtered_options:
             filtered_options = all_options
-            st.warning("No matching tickers found.")
         
         ticker_options = [opt["label"] for opt in filtered_options]
         ticker_values = [opt["value"] for opt in filtered_options]
@@ -158,15 +219,15 @@ def render_sidebar():
                 st.markdown(f'<div class="category-label">📌 {opt["category"]}</div>', unsafe_allow_html=True)
                 break
         
-        # Custom ticker - Compact
-        with st.expander("➕ Custom Ticker"):
-            custom_ticker = st.text_input("Ticker", placeholder="e.g., BTC-USD", key="custom_ticker")
+        # Custom ticker - Ultra Compact
+        with st.expander("➕ Custom"):
+            custom_ticker = st.text_input("Ticker", placeholder="e.g., BTC-USD", key="custom_ticker", label_visibility="collapsed")
             if custom_ticker:
                 ticker = custom_ticker
-                st.info(f"Using: {ticker}")
+                st.caption(f"Using: {ticker}")
         
         # ============================================
-        # Date Range - Compact
+        # Date Range - Ultra Compact
         # ============================================
         st.subheader("📅 Date Range")
         col1, col2 = st.columns(2)
@@ -185,7 +246,7 @@ def render_sidebar():
                 key="end_date"
             )
         
-        # Quick presets - Compact
+        # Quick presets
         preset_col1, preset_col2, preset_col3 = st.columns(3)
         with preset_col1:
             if st.button("1Y", key="preset_1y", use_container_width=True):
@@ -207,17 +268,17 @@ def render_sidebar():
         if LSTM_AVAILABLE:
             use_lstm = st.checkbox("LSTM", value=True, key="use_lstm")
         else:
-            st.warning("⚠️ LSTM disabled")
+            st.caption("⚠️ LSTM disabled")
             use_lstm = False
         
         # ============================================
-        # Parameters - Compact
+        # Parameters - Ultra Compact
         # ============================================
         st.subheader("⚙️ Parameters")
         test_size = st.slider("Test Size", 0.1, 0.4, 0.2, 0.05, key="test_size")
         
-        # LSTM Parameters - Compact
-        with st.expander("🧠 LSTM Parameters"):
+        # LSTM Parameters - Ultra Compact
+        with st.expander("🧠 LSTM Params"):
             lookback = st.number_input("Lookback", min_value=10, max_value=120, value=60, key="lookback")
             lstm_epochs = st.number_input("Epochs", min_value=5, max_value=100, value=20, key="lstm_epochs")
             lstm_units = st.selectbox("Units", ["[100, 50]", "[50, 25]", "[100, 50, 25]"], index=1, key="lstm_units")
@@ -238,16 +299,16 @@ def render_sidebar():
         )
         
         if is_running:
-            st.info("⏳ Running...")
+            st.caption("⏳ Running...")
         elif forecast_completed:
-            st.success("✅ Done! Rerun to update.")
+            st.caption("✅ Done! Rerun")
         
         if st.button("🗑️ Clear", use_container_width=True):
             clear_all_results()
             st.rerun()
         
-        # Version info
-        st.caption("📌 v1.0 | ARIMA · Prophet · LSTM")
+        # Version info - minimal
+        st.caption("v1.0 | ARIMA · Prophet · LSTM")
         
         return {
             'ticker': ticker,
