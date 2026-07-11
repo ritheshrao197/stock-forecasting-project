@@ -226,16 +226,16 @@ data/
 *.hdf5
 
 # Reports and outputs
-reports/
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-*.pdf
-# *.html
-*.txt
-*.log
+# reports/
+# *.png
+# *.jpg
+# *.jpeg
+# *.gif
+# *.svg
+# *.pdf
+# # *.html
+# *.txt
+# *.log
 
 # Cache directories
 .cache/
