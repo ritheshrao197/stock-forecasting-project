@@ -41,6 +41,27 @@ def get_logs():
     """Get all logs"""
     return st.session_state.get('logs', [])
 
+def get_log_count():
+    """Get the number of log entries"""
+    return len(st.session_state.get('logs', []))
+
+def export_logs(filepath='reports/logs_export.txt'):
+    """Export logs to a text file
+    
+    Parameters:
+    -----------
+    filepath : str
+        Path to save the log file
+    """
+    import os
+    os.makedirs('reports', exist_ok=True)
+    
+    logs = get_logs()
+    with open(filepath, 'w') as f:
+        for log in logs:
+            f.write(f"[{log['timestamp']}] [{log['type'].upper()}] {log['message']}\n")
+    return filepath
+
 def log_info(message):
     """Add info log"""
     add_log(message, "info")
@@ -120,14 +141,4 @@ def render_logs():
     <div class="log-container">
         {log_html}
     </div>
-    """, unsafe_allow_html=True)
-    
-    # Auto-scroll to bottom using JavaScript
-    st.markdown("""
-    <script>
-        const container = document.querySelector('.log-container');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
-    </script>
     """, unsafe_allow_html=True)
