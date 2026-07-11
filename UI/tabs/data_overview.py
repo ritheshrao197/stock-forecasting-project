@@ -1,10 +1,12 @@
 """
 Data Overview Tab
+Displays stock data visualization and statistics
 """
 
 import streamlit as st
 import plotly.graph_objects as go
 import yfinance as yf
+import pandas as pd
 
 def render_data_overview(data, ticker):
     """Render the data overview tab"""
