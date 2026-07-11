@@ -1,5 +1,6 @@
 """
 Live Logs Tab
+Displays real-time terminal output during forecasting
 """
 
 import streamlit as st
