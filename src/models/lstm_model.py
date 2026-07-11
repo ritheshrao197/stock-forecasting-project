@@ -1,5 +1,5 @@
 """
-LSTM Model Implementation - Fixed Version (No Infinite Loop)
+LSTM Model Implementation - Deployment Compatible
 """
 
 import numpy as np
@@ -10,22 +10,19 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import warnings
 warnings.filterwarnings('ignore')
 
-# Try to import TensorFlow with error handling - SUPPRESS WARNINGS
+# Try to import TensorFlow
 try:
     import tensorflow as tf
     from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout, GRU
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
     from tensorflow.keras.callbacks import EarlyStopping
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
-    # Suppress the warning to prevent console spam
-    # print("⚠️ TensorFlow not available. LSTM model will not work.")
 
 class LSTMModel:
     """LSTM model for time series forecasting"""
     
-    # Class-level flag to track if warning has been shown
     _warning_shown = False
     
     def __init__(self, lookback=30, n_features=1):
@@ -40,9 +37,7 @@ class LSTMModel:
         self.predictions = None
         self.history = None
         
-        # Only show warning once per session
         if not TENSORFLOW_AVAILABLE and not LSTMModel._warning_shown:
-            print("ℹ️ LSTM model initialized without TensorFlow. LSTM will be skipped.")
             LSTMModel._warning_shown = True
     
     def prepare_data(self, data, target_column='Close', feature_columns=None, test_size=0.2):
@@ -55,7 +50,6 @@ class LSTMModel:
         data = data[feature_columns].copy()
         data = data.fillna(method='ffill').fillna(method='bfill')
         
-        # Check if we have enough data
         if len(data) < self.lookback + 10:
             self.lookback = max(5, len(data) // 10)
         
@@ -72,9 +66,7 @@ class LSTMModel:
         if len(X) == 0:
             raise ValueError(f"No sequences created. Data length: {len(data)}, Lookback: {self.lookback}")
         
-        # Split into train and test
         split_idx = int(len(X) * (1 - test_size))
-        
         if split_idx < 10:
             split_idx = max(10, len(X) - 10)
         
@@ -110,7 +102,7 @@ class LSTMModel:
         self.model = model
         return model
     
-    def train(self, epochs=20, batch_size=16, validation_split=0.1, verbose=0):  # Set verbose=0 to reduce output
+    def train(self, epochs=20, batch_size=16, validation_split=0.1, verbose=0):
         """Train the LSTM model"""
         if not TENSORFLOW_AVAILABLE:
             raise ImportError("TensorFlow is not available")
@@ -126,9 +118,7 @@ class LSTMModel:
         
         callbacks = []
         if validation_split > 0:
-            callbacks.append(
-                EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-            )
+            callbacks.append(EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True))
         
         if len(self.X_train) < batch_size:
             batch_size = max(1, len(self.X_train) // 4)
@@ -192,11 +182,7 @@ class LSTMModel:
         mae = mean_absolute_error(y_true_original, y_pred)
         mape = np.mean(np.abs((y_true_original - y_pred) / y_true_original)) * 100
         
-        metrics = {
-            'RMSE': rmse,
-            'MAE': mae,
-            'MAPE': mape
-        }
+        metrics = {'RMSE': rmse, 'MAE': mae, 'MAPE': mape}
         
         if plot and len(y_true_original) > 0:
             self.plot_predictions(y_true_original, y_pred)
@@ -213,10 +199,6 @@ class LSTMModel:
         plt.ylabel('Price')
         plt.legend()
         plt.grid(True)
-        
-        import os
-        os.makedirs('reports', exist_ok=True)
-        plt.savefig('reports/lstm_predictions.png', dpi=300)
         plt.show()
     
     def plot_training_history(self):
@@ -225,7 +207,6 @@ class LSTMModel:
             return
         
         plt.figure(figsize=(12, 4))
-        
         plt.subplot(1, 2, 1)
         plt.plot(self.history.history['loss'], label='Training Loss')
         if 'val_loss' in self.history.history:
@@ -235,41 +216,16 @@ class LSTMModel:
         plt.ylabel('Loss')
         plt.legend()
         plt.grid(True)
-        
         plt.tight_layout()
-        
-        import os
-        os.makedirs('reports', exist_ok=True)
-        plt.savefig('reports/lstm_training_history.png', dpi=300)
         plt.show()
     
     def save_model(self, filename="lstm_model.h5"):
         """Save the trained model"""
         if not TENSORFLOW_AVAILABLE:
             return
-        
-        import os
-        os.makedirs('models', exist_ok=True)
         self.model.save(f"models/{filename}")
         print(f"Model saved to models/{filename}")
 
-# Create a function to check if LSTM is available
 def is_lstm_available():
+    """Check if LSTM is available"""
     return TENSORFLOW_AVAILABLE
-
-if __name__ == "__main__":
-    from data_loader import StockDataLoader
-    
-    loader = StockDataLoader(ticker="AAPL", start_date="2020-01-01")
-    data = loader.get_ready_data(add_indicators=True)
-    
-    if TENSORFLOW_AVAILABLE:
-        lstm = LSTMModel(lookback=30, n_features=5)
-        feature_cols = ['Close', 'SMA_20', 'RSI', 'Volume', 'Volatility']
-        lstm.prepare_data(data, target_column='Close', feature_columns=feature_cols, test_size=0.2)
-        lstm.build_model(lstm_units=[50, 25], dropout_rate=0.2)
-        lstm.train(epochs=10, batch_size=16, verbose=0)
-        lstm.evaluate()
-        lstm.plot_training_history()
-    else:
-        print("ℹ️ TensorFlow not available. Skipping LSTM demo.")
