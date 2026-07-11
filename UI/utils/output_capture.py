@@ -36,22 +36,3 @@ class OutputCapture:
     def get_stderr(self):
         """Get stderr only"""
         return self.stderr.getvalue()
-
-    def get_all_output_as_list(self):
-        """Get all output split into lines
-        
-        Returns:
-        --------
-        list: List of output lines
-        """
-        output = self.get_output()
-        return [line for line in output.split('\n') if line.strip()]
-
-    def has_errors(self):
-        """Check if any errors were captured
-        
-        Returns:
-        --------
-        bool: True if errors were captured
-        """
-        return len(self.stderr.getvalue().strip()) > 0

@@ -6,16 +6,7 @@ import streamlit as st
 from datetime import datetime
 
 def add_log(message, log_type="info"):
-    """
-    Add a log message with timestamp and type
-    
-    Parameters:
-    -----------
-    message : str
-        The log message
-    log_type : str
-        Type of log: info, success, warning, error, header
-    """
+    """Add a log message with timestamp and type"""
     if 'logs' not in st.session_state:
         st.session_state.logs = []
     
@@ -27,10 +18,9 @@ def add_log(message, log_type="info"):
     }
     st.session_state.logs.append(log_entry)
     
-    # Keep only last N logs
-    max_logs = st.session_state.get('max_log_entries', 200)
-    if len(st.session_state.logs) > max_logs:
-        st.session_state.logs = st.session_state.logs[-max_logs:]
+    # Keep only last 200 logs
+    if len(st.session_state.logs) > 200:
+        st.session_state.logs = st.session_state.logs[-200:]
 
 def clear_logs():
     """Clear all logs"""
@@ -40,27 +30,6 @@ def clear_logs():
 def get_logs():
     """Get all logs"""
     return st.session_state.get('logs', [])
-
-def get_log_count():
-    """Get the number of log entries"""
-    return len(st.session_state.get('logs', []))
-
-def export_logs(filepath='reports/logs_export.txt'):
-    """Export logs to a text file
-    
-    Parameters:
-    -----------
-    filepath : str
-        Path to save the log file
-    """
-    import os
-    os.makedirs('reports', exist_ok=True)
-    
-    logs = get_logs()
-    with open(filepath, 'w') as f:
-        for log in logs:
-            f.write(f"[{log['timestamp']}] [{log['type'].upper()}] {log['message']}\n")
-    return filepath
 
 def log_info(message):
     """Add info log"""
@@ -90,7 +59,6 @@ def render_logs():
         st.info("📝 No logs yet. Run the forecast to see terminal output.")
         return
     
-    # Color mapping for log types
     color_map = {
         "info": "log-info",
         "success": "log-success",
