@@ -1,22 +1,14 @@
 """
 Stock Market Price Forecasting - Interactive Web UI
-Main Entry Point
+Main Entry Point - Fixed for Infinite Loop
 """
 
-import logging
 import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # Configuration
 from config.settings import APP_TITLE, APP_ICON, APP_LAYOUT
@@ -40,7 +32,33 @@ from src.data_loader import StockDataLoader
 from src.data_preprocessing import DataPreprocessor
 from src.models.arima_model import ARIMAModel
 from src.models.prophet_model import ProphetModel
-from src.models.lstm_model import LSTMModel
+
+# Try to import LSTM - if not available, use a dummy
+try:
+    from src.models.lstm_model import LSTMModel, is_lstm_available
+    LSTM_AVAILABLE = is_lstm_available()
+except ImportError:
+    LSTM_AVAILABLE = False
+
+if not LSTM_AVAILABLE:
+    # Create a dummy LSTM class that does nothing
+    class LSTMModel:
+        def __init__(self, *args, **kwargs):
+            pass
+        def prepare_data(self, *args, **kwargs):
+            return None, None, None, None
+        def build_model(self, *args, **kwargs):
+            pass
+        def train(self, *args, **kwargs):
+            pass
+        def predict(self, *args, **kwargs):
+            return np.array([])
+        def evaluate(self, *args, **kwargs):
+            return {'RMSE': np.nan, 'MAE': np.nan, 'MAPE': np.nan}
+        def save_model(self, *args, **kwargs):
+            pass
+        def plot_training_history(self):
+            pass
 
 # Page configuration
 st.set_page_config(
@@ -68,20 +86,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
-SESSION_STATE_KEYS = {
-    'data': None,
-    'predictions': {},
-    'results': None,
-    'models_trained': False,
-    'logs': [],
-    'is_running': False,
-    'forecast_count': 0
-}
-
-for key, default_value in SESSION_STATE_KEYS.items():
-    if key not in st.session_state:
-        st.session_state[key] = default_value
+# Initialize session state - ONLY ONCE
+if 'data' not in st.session_state:
+    st.session_state.data = None
+if 'predictions' not in st.session_state:
+    st.session_state.predictions = {}
+if 'results' not in st.session_state:
+    st.session_state.results = None
+if 'models_trained' not in st.session_state:
+    st.session_state.models_trained = False
+if 'logs' not in st.session_state:
+    st.session_state.logs = []
+if 'is_running' not in st.session_state:
+    st.session_state.is_running = False
+if 'forecast_completed' not in st.session_state:
+    st.session_state.forecast_completed = False
 
 # ============================================
 # SIDEBAR
@@ -164,13 +183,16 @@ with tab6:
     render_about()
 
 # ============================================
-# BACKEND LOGIC - Run Forecast
+# BACKEND LOGIC - Run Forecast (ONLY ON BUTTON CLICK)
 # ============================================
 
-if config['run_button']:
+# Only run when the button is clicked AND not already running
+if config['run_button'] and not st.session_state.is_running and not st.session_state.forecast_completed:
+    
     # Clear previous logs
     clear_logs()
     st.session_state.is_running = True
+    st.session_state.forecast_completed = False
     
     # Add header
     log_header("="*60)
@@ -180,8 +202,10 @@ if config['run_button']:
     models_enabled = []
     if config['use_arima']: models_enabled.append("ARIMA")
     if config['use_prophet']: models_enabled.append("Prophet")
-    if config['use_lstm']: models_enabled.append("LSTM")
+    if config['use_lstm'] and LSTM_AVAILABLE: models_enabled.append("LSTM")
     log_info(f"🤖 Models: {', '.join(models_enabled)}")
+    if not LSTM_AVAILABLE:
+        log_warning("⚠️ LSTM disabled - TensorFlow not installed")
     log_header("="*60)
     
     with st.spinner("🔄 Fetching data and training models..."):
@@ -210,7 +234,7 @@ if config['run_button']:
             log_info(f"   Date range: {data.index[0].strftime('%Y-%m-%d')} to {data.index[-1].strftime('%Y-%m-%d')}")
             
             # Split data
-            log_info("📊 Step 2: Splitting data into train/validation/test...")
+            log_info("📊 Step 2: Splitting data...")
             preprocessor = DataPreprocessor(data)
             train, val, test = preprocessor.split_data(test_size=config['test_size'], validation_size=0.1)
             log_info(f"   Training: {len(train)} days")
@@ -239,7 +263,6 @@ if config['run_button']:
                     
                     st.session_state.predictions['ARIMA'] = arima_pred.values if hasattr(arima_pred, 'values') else arima_pred
                     
-                    # Evaluate
                     rmse = np.sqrt(np.mean((test['Close'].values - st.session_state.predictions['ARIMA'][:len(test)])**2))
                     mae = np.mean(np.abs(test['Close'].values - st.session_state.predictions['ARIMA'][:len(test)]))
                     mape = np.mean(np.abs((test['Close'].values - st.session_state.predictions['ARIMA'][:len(test)]) / test['Close'].values)) * 100
@@ -296,9 +319,9 @@ if config['run_button']:
                     log_error(f"❌ Prophet model failed: {str(e)}")
             
             # ============================================
-            # LSTM
+            # LSTM (only if available)
             # ============================================
-            if config['use_lstm']:
+            if config['use_lstm'] and LSTM_AVAILABLE:
                 log_header("="*50)
                 log_header("🤖 Step 5: Training LSTM Model")
                 log_header("="*50)
@@ -308,7 +331,7 @@ if config['run_button']:
                     
                     max_lookback = min(config['lookback'], len(data) // 5)
                     if config['lookback'] > max_lookback:
-                        log_warning(f"   Reducing lookback from {config['lookback']} to {max_lookback} due to data size")
+                        log_warning(f"   Reducing lookback from {config['lookback']} to {max_lookback}")
                         lookback_actual = max_lookback
                     else:
                         lookback_actual = config['lookback']
@@ -351,10 +374,12 @@ if config['run_button']:
                         log_info(f"   MAPE: {mape:.2f}%")
                         log_info(f"   R²: {r2:.4f}")
                     else:
-                        log_warning("   LSTM predictions not available - skipping evaluation")
+                        log_warning("   LSTM predictions not available")
                         
                 except Exception as e:
                     log_error(f"❌ LSTM model failed: {str(e)}")
+            elif config['use_lstm'] and not LSTM_AVAILABLE:
+                log_warning("⚠️ LSTM skipped - TensorFlow not installed")
             
             # ============================================
             # Complete
@@ -367,6 +392,7 @@ if config['run_button']:
             results_df = pd.DataFrame(results)
             st.session_state.results = results_df
             st.session_state.models_trained = True
+            st.session_state.forecast_completed = True
             
             st.success(f"✅ Forecast complete! {len(results)} models trained successfully.")
             st.balloons()
@@ -377,13 +403,17 @@ if config['run_button']:
                 st.info(f"🏆 Best Model: **{best['Model']}** (RMSE: {best['RMSE']:.4f})")
             
             st.session_state.is_running = False
-            st.rerun()
             
         except Exception as e:
             log_error(f"❌ Error: {str(e)}")
             st.error(f"❌ Error: {str(e)}")
             st.exception(e)
             st.session_state.is_running = False
+            st.session_state.forecast_completed = False
+
+# If forecast is completed, show a message
+if st.session_state.forecast_completed and st.session_state.models_trained:
+    st.success("✅ Forecast completed! Results are available in the tabs above.")
 
 # ============================================
 # Footer
