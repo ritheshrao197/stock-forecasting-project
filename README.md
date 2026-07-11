@@ -1,19 +1,29 @@
-# Stock Market Price Forecasting
+# 📈 Stock Market Price Forecasting
 
-A comprehensive project implementing ARIMA, Prophet, and LSTM models for stock market price forecasting with short-term vs long-term prediction analysis.
+An interactive web application for forecasting stock prices using ARIMA, Prophet, and LSTM models.
 
-## 📋 Features
+## ✨ Features
 
-- **Data Acquisition**: Automatic data fetching from Yahoo Finance
-- **Data Preprocessing**: Technical indicators, feature engineering, and data splitting
-- **Three Models**: ARIMA, Prophet, and LSTM implementations
-- **Model Comparison**: Comprehensive evaluation with RMSE, MAE, MAPE, R²
-- **Short-term vs Long-term**: Analysis of model performance across different horizons
-- **Visualization**: Interactive and static plots for analysis
+- 📊 **Real-time Data**: Fetch live stock data from Yahoo Finance
+- 🤖 **Multiple Models**: ARIMA, Prophet, and LSTM
+- 📈 **Interactive Visualizations**: Plotly charts with zoom and hover
+- 📊 **Model Comparison**: RMSE, MAE, MAPE, R² metrics
+- 📝 **Live Logs**: Real-time terminal output during processing
+- 🔍 **Searchable Tickers**: 100+ pre-loaded symbols with search
+- 📱 **Responsive**: Works on desktop and mobile
 
 ## 🚀 Quick Start
 
-### 1. Clone the repository
+### Installation
+
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/yourusername/stock-forecasting-project.git
 cd stock-forecasting-project
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
