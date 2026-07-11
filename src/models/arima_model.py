@@ -198,10 +198,16 @@ class ARIMAModel:
         mae = mean_absolute_error(test_data, predictions)
         mape = np.mean(np.abs((test_data - predictions) / test_data)) * 100
         
+        # Calculate R² score
+        ss_res = np.sum((test_data - predictions) ** 2)
+        ss_tot = np.sum((test_data - np.mean(test_data)) ** 2)
+        r2 = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+        
         metrics = {
             'RMSE': rmse,
             'MAE': mae,
-            'MAPE': mape
+            'MAPE': mape,
+            'R2': r2
         }
         
         print("\n=== Model Evaluation ===")
