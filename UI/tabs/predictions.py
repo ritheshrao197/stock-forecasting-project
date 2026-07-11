@@ -1,5 +1,6 @@
 """
 Predictions Tab
+Displays forecast predictions vs actual values
 """
 
 import streamlit as st
