@@ -1,5 +1,6 @@
 """
 About Tab
+Project information and documentation
 """
 
 import streamlit as st
