@@ -2,8 +2,52 @@
 Stock Market Price Forecasting - Interactive Web UI
 Main Entry Point - Fixed for Infinite Loop
 """
+# At the top of app.py, add these imports
+import time
+import random
+from functools import lru_cache
 
+# Add this cache decorator
+@st.cache_data(ttl=3600, max_entries=50, show_spinner=False)
+def fetch_stock_data_with_cache(ticker, start_date, end_date):
+    """Fetch stock data with caching to prevent rate limiting"""
+    try:
+        # Add a small random delay to prevent hitting rate limits
+        time.sleep(random.uniform(0.5, 1.5))
+        
+        loader = StockDataLoader(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date
+        )
+        data = loader.get_ready_data(add_indicators=True)
+        return data
+    except Exception as e:
+        # If rate limited, wait longer and retry
+        if "Too Many Requests" in str(e):
+            time.sleep(random.uniform(5, 10))
+            loader = StockDataLoader(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date
+            )
+            data = loader.get_ready_data(add_indicators=True)
+            return data
+        raise e
+
+# In your backend logic, replace the data loading with:
+data = fetch_stock_data_with_cache(ticker, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
 import streamlit as st
+# Enable caching for data loading
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_stock_data(ticker, start_date, end_date):
+    """Load stock data with caching"""
+    from src.data_loader import StockDataLoader
+    loader = StockDataLoader(ticker=ticker, start_date=start_date, end_date=end_date)
+    data = loader.get_ready_data(add_indicators=True)
+    return data
+
+# Use this in your backend logic instead of creating a new loader each time
 import pandas as pd
 import numpy as np
 from datetime import datetime

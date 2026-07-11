@@ -3,6 +3,16 @@ Stock Market Price Forecasting - Single File Version for Streamlit Cloud
 """
 
 import streamlit as st
+# Enable caching for data loading
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_stock_data(ticker, start_date, end_date):
+    """Load stock data with caching"""
+    from src.data_loader import StockDataLoader
+    loader = StockDataLoader(ticker=ticker, start_date=start_date, end_date=end_date)
+    data = loader.get_ready_data(add_indicators=True)
+    return data
+
+# Use this in your backend logic instead of creating a new loader each time
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
