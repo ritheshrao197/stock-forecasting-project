@@ -1,5 +1,6 @@
 """
 Model Results Tab
+Displays model performance metrics and comparisons
 """
 
 import streamlit as st
