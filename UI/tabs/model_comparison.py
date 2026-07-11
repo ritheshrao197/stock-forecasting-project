@@ -1,5 +1,6 @@
 """
 Model Comparison Tab
+Displays detailed model comparison with radar chart
 """
 
 import streamlit as st
